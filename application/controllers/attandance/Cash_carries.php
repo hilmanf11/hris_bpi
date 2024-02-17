@@ -271,7 +271,7 @@ class Cash_carries extends CI_Controller
             //Shift and Setting Group
             $tolerance_hour_min = date("H:i:s", strtotime('-2 Hour', strtotime(@$employee['time_in'])));
             $tolerance_hour_plus = date("H:i:s", strtotime('+2 Hour', strtotime(@$employee['time_in'])));
-            $this->db->select("a.ot_start, a.ot_end");
+            $this->db->select("d.ot_start, d.ot_end");
             $this->db->from('shift_employees b');
             $this->db->join('shifts c', 'c.id = b.shift_id');
             $this->db->join('shift_details d', 'd.shift_id = c.id');

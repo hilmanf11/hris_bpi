@@ -481,6 +481,7 @@ class Attandances extends CI_Controller
 
                     $no++;
                 }
+                
                 $html .= '</table>
                 <br><br>
                 <div style="width:100%; float:left; margin-bottom:20px;">

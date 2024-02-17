@@ -1,5 +1,5 @@
 <!-- TABLE DATAGRID -->
-<table id="dg" class="easyui-datagrid" style="width:99.5%;" toolbar="#toolbar">
+<table id="dg" class="easyui-datagrid" style="width:100%;" toolbar="#toolbar">
     <thead>
         <tr>
             <th rowspan="2" field="ck" checkbox="true"></th>
@@ -33,55 +33,59 @@
 </table>
 
 <!-- TOOLBAR DATAGRID -->
-<div id="toolbar" style="height: 255px;">
-    <fieldset style="width: 99%; border:2px solid #d0d0d0; margin-bottom: 5px; margin-top: 5px; border-radius:4px;">
-        <legend><b>Form Filter Data</b></legend>
-        <div style="width: 50%; float: left;">
-            <div class="fitem">
-                <span style="width:30%; display:inline-block;">Period Date</span>
-                <input style="width:28%;" name="filter_from" id="filter_from" value="<?= date("Y-m-01") ?>" data-options="formatter:myformatter,parser:myparser, editable: false" class="easyui-datebox"> To
-                <input style="width:28%;" name="filter_to" id="filter_to" value="<?= date("Y-m-t") ?>" data-options="formatter:myformatter,parser:myparser, editable: false" class="easyui-datebox">
-            </div>
-            <div class="fitem">
-                <span style="width:30%; display:inline-block;">Division</span>
-                <input style="width:60%;" id="filter_division" class="easyui-combobox">
-            </div>
-            <div class="fitem">
-                <span style="width:30%; display:inline-block;">Departement</span>
-                <input style="width:60%;" id="filter_departement" class="easyui-combobox">
-            </div>
-            <div class="fitem">
-                <span style="width:30%; display:inline-block;">Departement Sub</span>
-                <input style="width:60%;" id="filter_departement_sub" class="easyui-combobox">
-            </div>
-            <div class="fitem">
-                <span style="width:30%; display:inline-block;"></span>
-                <a href="javascript:;" class="easyui-linkbutton" onclick="filter()"><i class="fa fa-search"></i> Filter Data</a>
-            </div>
+<div id="toolbar">
+    <div class="easyui-accordion" style="width:100%; margin-bottom:5px;">
+        <div title="Click this to hide the filter" data-options="onCollapse: function(){ $('#dg').datagrid('reload'); }" style="padding:10px; background:#F4F4F4;">
+            <fieldset style="width: 99%; border:2px solid #d0d0d0; border-radius:4px;">
+                <legend><b>Form Filter Data</b></legend>
+                <div style="width: 50%; float: left;">
+                    <div class="fitem">
+                        <span style="width:30%; display:inline-block;">Period Date</span>
+                        <input style="width:28%;" name="filter_from" id="filter_from" value="<?= date("Y-m-01") ?>" data-options="formatter:myformatter,parser:myparser, editable: false" class="easyui-datebox"> To
+                        <input style="width:28%;" name="filter_to" id="filter_to" value="<?= date("Y-m-t") ?>" data-options="formatter:myformatter,parser:myparser, editable: false" class="easyui-datebox">
+                    </div>
+                    <div class="fitem">
+                        <span style="width:30%; display:inline-block;">Division</span>
+                        <input style="width:60%;" id="filter_division" class="easyui-combobox">
+                    </div>
+                    <div class="fitem">
+                        <span style="width:30%; display:inline-block;">Departement</span>
+                        <input style="width:60%;" id="filter_departement" class="easyui-combobox">
+                    </div>
+                    <div class="fitem">
+                        <span style="width:30%; display:inline-block;">Departement Sub</span>
+                        <input style="width:60%;" id="filter_departement_sub" class="easyui-combobox">
+                    </div>
+                    <div class="fitem">
+                        <span style="width:30%; display:inline-block;"></span>
+                        <a href="javascript:;" class="easyui-linkbutton" onclick="filter()"><i class="fa fa-search"></i> Filter Data</a>
+                    </div>
+                </div>
+                <div style="width: 50%; float: left;">
+                    <div class="fitem">
+                        <span style="width:30%; display:inline-block;">Employee</span>
+                        <input style="width:60%;" id="filter_employee" class="easyui-combogrid">
+                    </div>
+                    <div class="fitem">
+                        <span style="width:30%; display:inline-block;">Permit Type</span>
+                        <input style="width:60%;" id="filter_permit_type" class="easyui-combobox">
+                    </div>
+                    <div class="fitem">
+                        <span style="width:30%; display:inline-block;">Request By</span>
+                        <input style="width:60%;" id="filter_request" class="easyui-combobox">
+                    </div>
+                    <div class="fitem">
+                        <span style="width:30%; display:inline-block;">Approval</span>
+                        <select style="width:60%;" id="filter_approval" class="easyui-combobox" data-options="panelHeight:'auto'">
+                            <option value="">Choose All</option>
+                            <option value="0">Approve</option>
+                            <option value="1">Checked</option>
+                        </select>
+                    </div>
+                </div>
+            </fieldset>
         </div>
-        <div style="width: 50%; float: left;">
-            <div class="fitem">
-                <span style="width:30%; display:inline-block;">Employee</span>
-                <input style="width:60%;" id="filter_employee" class="easyui-combogrid">
-            </div>
-            <div class="fitem">
-                <span style="width:30%; display:inline-block;">Permit Type</span>
-                <input style="width:60%;" id="filter_permit_type" class="easyui-combobox">
-            </div>
-            <div class="fitem">
-                <span style="width:30%; display:inline-block;">Request By</span>
-                <input style="width:60%;" id="filter_request" class="easyui-combobox">
-            </div>
-            <div class="fitem">
-                <span style="width:30%; display:inline-block;">Approval</span>
-                <select style="width:60%;" id="filter_approval" class="easyui-combobox" data-options="panelHeight:'auto'">
-                    <option value="">Choose All</option>
-                    <option value="0">Approve</option>
-                    <option value="1">Checked</option>
-                </select>
-            </div>
-        </div>
-    </fieldset>
+    </div>
     <?= $button ?>
 </div>
 
@@ -165,8 +169,7 @@
         url_save = '<?= base_url('attandance/permits/create') ?>';
         $('#frm_insert').form('clear');
         $('#employee_id').combogrid('enable');
-        $("#date_from").datebox('enable');
-        $("#date_to").datebox('enable');
+        $('#permit_date').datebox('enable');
         $("#trans_date").datebox('setValue', "<?= date("Y-m-d") ?>");
     }
 
@@ -176,28 +179,8 @@
         if (row) {
             $('#dlg_insert').dialog('open');
             $('#employee_id').combogrid('disable');
-            $("#date_from").datebox('disable');
-            $("#date_to").datebox('disable');
-
+            $('#permit_date').datebox('disable');
             $('#frm_insert').form('load', row);
-
-            $("#date_from").datebox('setValue', row.permit_date);
-            $("#date_to").datebox('setValue', row.permit_date);
-
-            $.ajax({
-                url: '<?= base_url('attandance/permits/readShifts') ?>',
-                type: 'post',
-                data: 'employee_id=' + row.employee_id,
-                success: function(row) {
-                    var result = eval('(' + row + ')');
-                    if (row == "null") {
-                        $("#working_day").numberbox('clear');
-                    } else {
-                        $("#working_day").numberbox('setValue', result.days);
-                    }
-                }
-            });
-
             url_save = '<?= base_url('attandance/permits/update') ?>?id=' + btoa(row.id);
         } else {
             toastr.warning("Please select one of the data in the table first!", "Information");
@@ -267,7 +250,12 @@
             "&filter_approval=" + filter_approval;
 
         $('#dg').datagrid({
-            url: '<?= base_url('attandance/permits/datatables') ?>' + url
+            url: '<?= base_url('attandance/permits/datatables') ?>' + url,
+            pagination: true,
+            rownumbers: true,
+            fit: true,
+            pageList: [20, 50, 100, 500, 1000],
+            pageSize: 20,
         });
 
         $("#printout").contents().find('html').html("<center><br><br><br><b style='font-size:20px;'>Please Wait...</b></center>");
@@ -308,11 +296,7 @@
     }
 
     $(function() {
-        $('#dg').datagrid({
-            url: '<?= base_url('attandance/permits/datatables') ?>',
-            pagination: true,
-            rownumbers: true
-        });
+        filter();
 
         //SAVE DATA
         $('#dlg_insert').dialog({
@@ -320,6 +304,18 @@
                 text: 'Save',
                 iconCls: 'icon-ok',
                 handler: function() {
+                    $('#dlg_insert').dialog('close');
+
+                    Swal.fire({
+                        title: 'Please Wait for Save Data',
+                        showConfirmButton: false,
+                        allowOutsideClick: false,
+                        allowEscapeKey: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                        },
+                    });
+
                     $('#frm_insert').form('submit', {
                         url: url_save,
                         onSubmit: function() {
@@ -334,8 +330,8 @@
                                 toastr.error(result.message, result.title);
                             }
 
-                            $('#dlg_insert').dialog('close');
                             $('#dg').datagrid('reload');
+                            Swal.close();
                         }
                     });
                 }
@@ -613,6 +609,7 @@
             prompt: "Choose Permit Type",
             onSelect: function(permit) {
                 var employee_id = $('#employee_id').combogrid('getValue');
+
                 $.ajax({
                     url: '<?= base_url('attandance/permits/readLeave') ?>',
                     type: 'post',
@@ -655,9 +652,11 @@
                                 success: function(days) {
                                     var leave = $("#leave").numberbox('getValue');
 
-                                    if (parseInt(leave - days) < 0) {
-                                        toastr.error("the Leave is over", "Leave 0");
-                                        $("#date_from").datebox('clear');
+                                    if(permit.cutoff == "YES"){
+                                        if (parseInt(leave - days) < 0) {
+                                            toastr.error("the Leave is over", "Leave 0");
+                                            $("#date_from").datebox('clear');
+                                        }
                                     }
                                 }
                             });
@@ -680,9 +679,11 @@
                                 success: function(days) {
                                     var leave = $("#leave").numberbox('getValue');
 
-                                    if (parseInt(leave - days) < 0) {
-                                        toastr.error("the Leave is over", "Leave 0");
-                                        $("#date_to").datebox('clear');
+                                    if(permit.cutoff == "YES"){
+                                        if (parseInt(leave - days) < 0) {
+                                            toastr.error("the Leave is over", "Leave 0");
+                                            $("#date_to").datebox('clear');
+                                        }
                                     }
                                 }
                             });

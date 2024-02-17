@@ -234,8 +234,10 @@ class Permits extends CI_Controller
                         );
                         $send = $this->crud->create('permits', $post_final);
                     } else {
-                        echo json_encode(array("title" => "Available", "message" => "The permit requestion for sunday cannot created", "theme" => "error"));
-                        exit;
+                        if($date_from == ($date_to + (60 * 60 * 24))){
+                            echo json_encode(array("title" => "Available", "message" => "The permit requestion for sunday cannot created", "theme" => "error"));
+                            exit;
+                        }
                     }
                 }
 

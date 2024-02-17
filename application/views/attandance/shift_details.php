@@ -29,7 +29,7 @@
 </table>
 
 <!-- TOOLBAR DATAGRID -->
-<div id="toolbar" style="height: 195px; padding: 10px;">
+<div id="toolbar" style="height: 200px; padding:10px;">
     <div style="width: 100%;">
         <fieldset style="width: 30%; border:2px solid #d0d0d0; margin-bottom: 5px; margin-top: 5px; border-radius:4px;">
             <legend><b>Form Filter Data</b></legend>
@@ -206,7 +206,10 @@
         $('#dg').datagrid({
             url: '<?= base_url('attandance/shift_details/datatables') ?>',
             pagination: true,
-            rownumbers: true
+            rownumbers: true,
+            fit: true,
+            pageList: [20, 50, 100, 500, 1000],
+            pageSize: 20,
         });
 
         //SAVE DATA
