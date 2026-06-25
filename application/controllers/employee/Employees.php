@@ -58,7 +58,7 @@ class Employees extends CI_Controller
     }
 
     //GET DATA
-    public function reads()
+    public function reads($status = 0)
     {
         $post = isset($_POST['q']) ? $_POST['q'] : "";
         $get = $this->input->get();
@@ -76,7 +76,7 @@ class Employees extends CI_Controller
 
         $this->db->select('*');
         $this->db->from('employees');
-        $this->db->where('status', 0);
+        $this->db->where('status', $status);
         if ($get) {
             $this->db->like($get);
         }
@@ -218,22 +218,23 @@ class Employees extends CI_Controller
             $requestcode = (int) @substr($row->kode, -4);
             $requestcode++;
 
-            $autoID = $numberFormat . sprintf("%04s", $requestcode);
+            $autoID = trim($numberFormat) . sprintf("%04s", $requestcode);
         } else {
             $numberFormat = $source->number_id . $date;
 
             $this->db->select("max(number) as kode");
             $this->db->from("employees");
             $this->db->like("number", $numberFormat);
+            $this->db->like("source_id", $source_id);
             $row = $this->db->get()->row();
 
             $requestcode = (int) @substr($row->kode, -4);
             $requestcode++;
 
-            $autoID = $numberFormat . sprintf("%04s", $requestcode);
+            $autoID = trim($numberFormat) . sprintf("%04s", $requestcode);
         }
 
-        echo $autoID;
+        die(json_encode(array("id" => $autoID)));
     }
 
     //GET DATATABLES
@@ -977,7 +978,8 @@ class Employees extends CI_Controller
                 k.number as marital_number,
                 k.name as marital_name,
                 l.number as source_number,
-                l.name as source_name');
+                l.name as source_name,
+                m.name as shift_name');
         $this->db->from('employees a');
         $this->db->join('notifications b', 'a.id = b.table_id', 'left');
         $this->db->join('divisions c', 'c.id = a.division_id');
@@ -990,6 +992,7 @@ class Employees extends CI_Controller
         $this->db->join('religions j', 'j.id = a.religion_id', 'left');
         $this->db->join('maritals k', 'k.id = a.marital_id', 'left');
         $this->db->join('sources l', 'l.id = a.source_id', 'left');
+        $this->db->join("(SELECT a.employee_id, b.name FROM shift_employees a JOIN shifts b ON a.shift_id = b.id) m", 'm.employee_id = a.id', 'left');
         $this->db->where('a.deleted', 0);
         $this->db->like('a.status', $filter_status);
         $this->db->like('a.departement_id', $aprvDepartement);
@@ -1036,6 +1039,7 @@ class Employees extends CI_Controller
                 <th>Departement</th>
                 <th>ID Departement Sub</th>
                 <th>Departement Sub</th>
+                <th>Job Type</th>
                 <th>ID Position</th>
                 <th>Position</th>
                 <th>Level</th>
@@ -1045,6 +1049,7 @@ class Employees extends CI_Controller
                 <th>Group</th>
                 <th>ID Source</th>
                 <th>Source</th>
+                <th>Shift Type</th>
                 <th>Join Date</th>
                 <th>Contract Expired</th>
                 <th>Fit Of Service</th>
@@ -1080,7 +1085,7 @@ class Employees extends CI_Controller
         foreach ($records as $data) {
             $html .= '<tr>
                     <td>' . $no . '</td>
-                    <td class="str">' . $data['number'] . '</td>
+                    <td style="mso-number-format:\@;">' . $data['number'] . '</td>
                     <td>' . $data['name'] . '</td>
                     <td>' . $data['nickname'] . '</td>
                     <td><b style="color:red;">' . $data['division_number'] . '</b></td>
@@ -1089,6 +1094,7 @@ class Employees extends CI_Controller
                     <td>' . $data['departement_name'] . '</td>
                     <td><b style="color:red;">' . $data['departement_sub_number'] . '</b></td>
                     <td>' . $data['departement_sub_name'] . '</td>
+                    <td>' . $data['type'] . '</td>
                     <td><b style="color:red;">' . $data['position_number'] . '</b></td>
                     <td>' . $data['position_name'] . '</td>
                     <td>' . $data['level'] . '</td>
@@ -1098,6 +1104,7 @@ class Employees extends CI_Controller
                     <td>' . $data['group_name'] . '</td>
                     <td><b style="color:red;">' . $data['source_number'] . '</b></td>
                     <td>' . $data['source_name'] . '</td>
+                    <td>' . $data['shift_name'] . '</td>
                     <td>' . $data['date_sign'] . '</td>
                     <td>' . $data['date_expired'] . '</td>
                     <td>' . $this->readService($data['date_sign']) . '</td>
@@ -1108,14 +1115,14 @@ class Employees extends CI_Controller
                     <td>' . $data['blood'] . '</td>
                     <td>' . $data['religion_name'] . '</td>
                     <td>' . $data['marital_name'] . '</td>
-                    <td class="str">' . $data['national_id'] . '</td>
-                    <td class="str">' . $data['tax_id'] . '</td>
-                    <td class="str">' . $data['jamsostek'] . '</td>
+                    <td style="mso-number-format:\@;">' . $data['national_id'] . '</td>
+                    <td style="mso-number-format:\@;">' . $data['tax_id'] . '</td>
+                    <td style="mso-number-format:\@;">' . $data['jamsostek'] . '</td>
                     <td>' . $data['jamsostek_date'] . '</td>
                     <td>' . $data['jkn'] . '</td>
                     <td>' . $data['jkn_date'] . '</td>
                     <td>' . $data['telphone'] . '</td>
-                    <td class="str">' . $data['mobile_phone'] . '</td>
+                    <td style="mso-number-format:\@;">' . $data['mobile_phone'] . '</td>
                     <td>' . $data['emergency_no'] . '</td>
                     <td>' . $data['email'] . '</td>
                     <td>' . $data['driving_no'] . '</td>
@@ -1123,7 +1130,7 @@ class Employees extends CI_Controller
                     <td>' . $data['stnk_no'] . '</td>
                     <td>' . $data['stnk_date'] . '</td>
                     <td>' . $data['bank_name'] . '</td>
-                    <td class="str">' . $data['bank_no'] . '</td>
+                    <td style="mso-number-format:\@;">' . $data['bank_no'] . '</td>
                     <td>' . $data['image_id'] . '</td>
                     <td>' . $data['image_profile'] . '</td>
                     <td>' . $data['status'] . '</td>

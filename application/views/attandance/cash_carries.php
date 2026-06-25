@@ -252,6 +252,19 @@
         $("#u_idm").show();
         $("#u_attachment").show();
         $("#addrow").show();
+
+        $("#trans_date").datebox({
+            onChange: function(trans_date){
+                $.ajax({
+                    url: '<?= base_url('attandance/cash_carries/requestCode') ?>',
+                    type: 'post',
+                    data: 'trans_date=' + trans_date,
+                    success: function(result) {
+                        $("#request_code").textbox('setValue', result);
+                    }
+                });
+            }
+        });
     }
 
     function generate(){
@@ -887,6 +900,7 @@
                     var file_attachment = "";
                     var file_attachment_idm = "";
 
+                    $('#dg2').datagrid('acceptChanges');
                     var rows = $('#dg2').datagrid('getRows');
                     var totalrows = rows.length;
                     endEditing();
@@ -914,22 +928,6 @@
                                 var file_attachment_idm = data.attachment_idm;
                             }
                         });
-
-                        // if ($("#attachment").filebox('getValue') == "") {
-                        //     var file_attachment = "";
-                        // } else {
-                        //     var attachment = $("#attachment").filebox('files')[0];
-                        //     var explode = attachment['name'].split('.');
-                        //     var file_attachment = request_code + "." + explode[1];
-                        // }
-
-                        // if ($("#attachment_idm").filebox('getValue') == "") {
-                        //     var file_attachment_idm = "";
-                        // } else {
-                        //     var attachment_idm = $("#attachment_idm").filebox('files')[0];
-                        //     var explode_idm = attachment_idm['name'].split('.');
-                        //     var file_attachment_idm = idm_no + "." + explode_idm[1];
-                        // }
 
                         for (let i = 0; i < totalrows; i++) {
                             if (rows[i].start) {
@@ -1231,19 +1229,6 @@
                                 $("#idm_no").textbox('setValue', idm_no);
                             }
                         });
-                    }
-                });
-            }
-        });
-
-        $("#trans_date").datebox({
-            onChange: function(trans_date){
-                $.ajax({
-                    url: '<?= base_url('attandance/cash_carries/requestCode') ?>',
-                    type: 'post',
-                    data: 'trans_date=' + trans_date,
-                    success: function(result) {
-                        $("#request_code").textbox('setValue', result);
                     }
                 });
             }

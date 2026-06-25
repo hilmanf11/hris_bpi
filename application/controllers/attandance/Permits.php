@@ -219,7 +219,7 @@ class Permits extends CI_Controller
                     echo json_encode(array("title" => "Available", "message" => "The permit requestion for this employee and permit date has been created", "theme" => "error"));
                     exit;
                 } else {
-                    if (date('w', $i) !== '0') {
+                    // if (date('w', $i) !== '0') {
                         $attachment = $this->crud->upload('attachment', ['pdf', 'png', 'jpg', 'jpeg'], 'assets/image/attandance/');
                         $post_final = array(
                             "employee_id" => $post['employee_id'],
@@ -233,12 +233,12 @@ class Permits extends CI_Controller
                             "attachment" => $attachment
                         );
                         $send = $this->crud->create('permits', $post_final);
-                    } else {
-                        if($date_from == ($date_to + (60 * 60 * 24))){
-                            echo json_encode(array("title" => "Available", "message" => "The permit requestion for sunday cannot created", "theme" => "error"));
-                            exit;
-                        }
-                    }
+                    // } else {
+                    //     if($date_from == ($date_to + (60 * 60 * 24))){
+                    //         echo json_encode(array("title" => "Available", "message" => "The permit requestion for sunday cannot created", "theme" => "error"));
+                    //         exit;
+                    //     }
+                    // }
                 }
 
                 $leave = ($leave - 1);

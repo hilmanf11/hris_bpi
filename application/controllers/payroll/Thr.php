@@ -88,7 +88,7 @@ class Thr extends CI_Controller
         if ($dateSign == "") {
             echo $y . $m . $d;
         } else {
-            return $y . $m . $d;
+            return array("periode" => "$y $m $d", "day" => $diff->d, "month" => $diff->m);
         }
     }
 
@@ -174,6 +174,7 @@ class Thr extends CI_Controller
                     p.amount as salary,
                     p.bpjs,
                     q.number as marital,
+                    q.ter_type,
                     a.tax_id,
                     o.thr_fee
                 FROM employees a
@@ -213,9 +214,18 @@ class Thr extends CI_Controller
     {
         if ($this->input->post()) {
             $record = $this->input->post();
-            $employee_id = $record['id'];
+            $cutoff = base64_decode($this->input->get('filter_cutoff'));
+            $salary = empty($record['salary']) ? 0 : $record['salary'];
+
+            $this->db->select('*');
+            $this->db->from('cutoff');
+            $this->db->order_by('start', 'desc');
+            $cutoffperiod = $this->db->get()->row();
+            $days = date("d", strtotime($cutoffperiod->start));
 
             $filter_year = $this->input->get('filter_year');
+            $employee_id = $record['id'];
+            $service = $this->readService($record['date_sign'], $cutoff);
 
             $allowence = $this->db->query("SELECT b.number, b.name, coalesce(a.amount, 0) as amount, b.calculate_days, b.type
                     FROM allowances b
@@ -225,81 +235,116 @@ class Thr extends CI_Controller
             $allowenceDatas = $allowence->result_array();
 
             $totalAllowence = 0;
-            if ($record['source_id'] == "") {
+            if($record['contract_name'] == "BORONGAN"){
                 foreach ($allowenceDatas as $allowenceData) {
                     $totalAllowence += $allowenceData['amount'];
                 }
-            } else {
-                $totalAllowence += $record['thr_fee'];
+            }else{
+                if ($record['source_id'] == "") {
+                    foreach ($allowenceDatas as $allowenceData) {
+                        $totalAllowence += $allowenceData['amount'];
+                    }
+                } else {
+                    $totalAllowence += $record['thr_fee'];
+                }
             }
 
+            // $date = date("Y-m-d");
+            // $timeStart = strtotime($record['date_sign']);
+            // $timeEnd = strtotime($date);
+            // // Menambah bulan ini + semua bulan pada tahun sebelumnya
+            // $numBulan = 1 + (date("Y", $timeEnd) - date("Y", $timeStart)) * 12;
+            // // menghitung selisih bulan
+            // $numBulan += date("m", $timeEnd) - date("m", $timeStart);
 
-            $date = date("Y-m-d");
-            $timeStart = strtotime($record['date_sign']);
-            $timeEnd = strtotime($date);
-            // Menambah bulan ini + semua bulan pada tahun sebelumnya
-            $numBulan = 1 + (date("Y", $timeEnd) - date("Y", $timeStart)) * 12;
-            // menghitung selisih bulan
-            $numBulan += date("m", $timeEnd) - date("m", $timeStart);
+            $numBulan = $service['month'];
+
+            if($service['day'] >= $days){
+                $numBulan += 1;
+            }
 
             //Menghitung jika fit for service lebih dari 12 bulan
-            if ($record['source_id'] == "") {
+            if($record['contract_name'] == "BORONGAN"){
                 if ($numBulan >= 12) {
-                    $thr = ($record['salary'] + $totalAllowence);
+                    $thr = ($totalAllowence * 25);
                 } else {
-                    $thr = round((($record['salary'] + $totalAllowence) / 12) * $numBulan);
+                    $thr = round((($totalAllowence * 25) / 12) * $numBulan);
                 }
-            } else {
-                if ($numBulan >= 12) {
-                    $thr = $record['thr_fee'];
+            }else{
+                if ($record['source_id'] == "") {
+                    if ($numBulan >= 12) {
+                        $thr = ($salary + $totalAllowence);
+                    } else {
+                        $thr = round((($salary + $totalAllowence) / 12) * $numBulan);
+                    }
                 } else {
-                    $thr = round(($record['thr_fee'] / 12) * $numBulan);
+                    if ($numBulan >= 12) {
+                        $thr = $record['thr_fee'];
+                    } else {
+                        $thr = round(($record['thr_fee'] / 12) * $numBulan);
+                    }
                 }
             }
-
 
             //Menghitung PPH 21
-            $config = $this->db->get('payroll_config')->result();
-            $income_pph = $thr;
-            $netto_year = ($income_pph * 12);
-            $r_marital = $this->crud->read('maritals', ["number" => $record['marital']]);
-            $r_ptkp = $this->crud->read('ptkp', ["marital_id" => @$r_marital->id]);
-            $tax_amount = ($netto_year - @$r_ptkp->amount);
-            $pph_debt = (($tax_amount * $config[0]->payroll_pph_payable) / 100);
-            $pph_pasal = round($pph_debt / 12);
+            // $config = $this->db->get('payroll_config')->result();
+            // $income_pph = $thr;
+            // $netto_year = ($income_pph * 12);
+            // $r_marital = $this->crud->read('maritals', ["number" => $record['marital']]);
+            // $r_ptkp = $this->crud->read('ptkp', ["marital_id" => @$r_marital->id]);
+            // $tax_amount = ($netto_year - @$r_ptkp->amount);
+            // $pph_debt = (($tax_amount * $config[0]->payroll_pph_payable) / 100);
+            // $pph_pasal = round($pph_debt / 12);
 
-            //Kalo gaji per tahun nya lebih dari master ptkp
-            if ($netto_year >= @$r_ptkp->amount) {
-                //jika npwp nya kosong maka kena potongan 120%
-                if ($record['tax_id'] == "" or $record['tax_id'] == null or $record['tax_id'] == "-") {
-                    $pph_final = round(($pph_pasal * $config[0]->payroll_npwp_null) / 100);
-                } else {
-                    $pph_final = $pph_pasal;
-                }
-                //kalo kurang ga kena pajak pph
-            } else {
-                $pph_final = 0;
+            // //Kalo gaji per tahun nya lebih dari master ptkp
+            // if ($netto_year >= @$r_ptkp->amount) {
+            //     //jika npwp nya kosong maka kena potongan 120%
+            //     if ($record['tax_id'] == "" or $record['tax_id'] == null or $record['tax_id'] == "-") {
+            //         $pph_final = round(($pph_pasal * $config[0]->payroll_npwp_null) / 100);
+            //     } else {
+            //         $pph_final = $pph_pasal;
+            //     }
+            //     //kalo kurang ga kena pajak pph
+            // } else {
+            //     $pph_final = 0;
+            // }
+
+            //Rumus TER
+            $this->db->select("number, ter");
+            $this->db->from('marital_categories');
+            $this->db->where('ter_from <', $thr);
+            $this->db->where('ter_to >', $thr);
+            $this->db->where('type', $record['ter_type']);
+            $marital_category = $this->db->get()->row();
+            
+            if(empty($marital_category)){
+                $ter = 0;
+            }else{
+                $ter = (($thr * $marital_category->ter) / 100);
             }
 
-            $arr = array(
-                "employee_id" => $record['id'],
-                "employee_number" => $record['number'],
-                "employee_name" => $record['name'],
-                "period" => $filter_year,
-                "date_sign" => $record['date_sign'],
-                "services" => $this->readService($record['date_sign'], date("Y-m-d")),
-                "departement_name" => $record['departement_name'],
-                "departement_sub_name" => $record['departement_sub_name'],
-                "position_name" => $record['position_name'],
-                "marital" => $record['marital'],
-                "tax_id" => $record['tax_id'],
-                "salary" => $record['salary'],
-                "allowence" => $totalAllowence,
-                "total" => ($record['salary'] + $totalAllowence),
-                "thr" => $thr,
-                "pph" => ($pph_final),
-                "total_thr" => ($thr - $pph_final),
-            );
+            if($numBulan > 1){
+                $arr = array(
+                    "employee_id" => $record['id'],
+                    "employee_number" => $record['number'],
+                    "employee_name" => $record['name'],
+                    "period" => $filter_year,
+                    "cutoff" => $cutoff,
+                    "date_sign" => $record['date_sign'],
+                    "services" => $service['periode'],
+                    "departement_name" => $record['departement_name'],
+                    "departement_sub_name" => $record['departement_sub_name'],
+                    "position_name" => $record['position_name'],
+                    "marital" => $record['marital'],
+                    "tax_id" => $record['tax_id'],
+                    "salary" => $salary,
+                    "allowence" => $totalAllowence,
+                    "total" => ($salary + $totalAllowence),
+                    "thr" => $thr,
+                    "pph" => ($ter),
+                    "total_thr" => ($thr - $ter),
+                );
+            }
 
             if (@$arr == null) {
                 $result = [];
@@ -403,8 +448,8 @@ class Thr extends CI_Controller
         $this->db->like('b.contract_id', $filter_employee_type);
         $this->db->like('b.group_id', $filter_group);
         $this->db->like('b.id', $filter_employee);
-        $this->db->order_by('a.departement_name', 'ASC');
-        $this->db->order_by('a.departement_sub_name', 'ASC');
+        // $this->db->order_by('a.departement_name', 'ASC');
+        // $this->db->order_by('a.departement_sub_name', 'ASC');
         $this->db->order_by('a.employee_name', 'ASC');
         $records = $this->db->get()->result_array();
 
@@ -438,6 +483,7 @@ class Thr extends CI_Controller
                 <th>Departement</th>
                 <th>Departement Sub</th>
                 <th>Join Date</th>
+                <th>Cutoff</th>
                 <th>Fit of Services</th>
                 <th>Position</th>
                 <th>Marital</th>
@@ -446,22 +492,25 @@ class Thr extends CI_Controller
                 <th>Allowence</th>
                 <th>Total</th>
                 <th>THR</th>
-                <th>PPH 21</th>
+                <th>TER</th>
                 <th>Total THR</th>
             </tr>';
         $no = 1;
+        $total_thr = 0;
         foreach ($records as $data) {
+            $total_thr += $data['total_thr'];
             $html .= '  <tr>
                             <td>' . $no . '</td>
-                            <td>' . $data['employee_id'] . '</td>
+                            <td style="mso-number-format:\@;">' . $data['employee_number'] . '</td>
                             <td>' . $data['employee_name'] . '</td>
                             <td>' . $data['departement_name'] . '</td>
                             <td>' . $data['departement_sub_name'] . '</td>
                             <td>' . date("d F Y", strtotime($data['date_sign'])) . '</td>
+                            <td>' . date("d F Y", strtotime($data['cutoff'])) . '</td>
                             <td>' . $data['services'] . '</td>
                             <td>' . $data['position_name'] . '</td>
                             <td>' . $data['marital'] . '</td>
-                            <td>' . $data['tax_id'] . '</td>
+                            <td style="mso-number-format:\@;">' . $data['tax_id'] . '</td>
                             <td>' . number_format($data['salary']) . '</td>
                             <td>' . number_format($data['allowence']) . '</td>
                             <td>' . number_format($data['total']) . '</td>
@@ -471,6 +520,11 @@ class Thr extends CI_Controller
                         </tr>';
             $no++;
         }
+
+        $html .= '  <tr>
+                        <td colspan="16">GRAND TOTAL</td>
+                        <td>' . number_format($total_thr) . '</td>
+                    </tr>';
 
         $html .= '</table></body></html>';
         echo $html;

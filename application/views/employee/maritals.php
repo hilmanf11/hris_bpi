@@ -4,7 +4,8 @@
         <tr>
             <th rowspan="2" field="ck" checkbox="true"></th>
             <th rowspan="2" data-options="field:'number',width:80,align:'center'">Code</th>
-            <th rowspan="2" data-options="field:'name',width:150,halign:'center'">Name</th>
+            <th rowspan="2" data-options="field:'name',width:250,halign:'center'">Name</th>
+            <th rowspan="2" data-options="field:'ter_type',width:80,align:'center'">TER Type</th>
             <th rowspan="2" data-options="field:'description',width:200,halign:'center'">Description</th>
             <th colspan="2" data-options="field:'',width:100,halign:'center'"> Created</th>
             <th colspan="2" data-options="field:'',width:100,halign:'center'"> Updated</th>
@@ -35,6 +36,10 @@
             <div class="fitem">
                 <span style="width:35%; display:inline-block;">Name</span>
                 <input style="width:60%;" name="name" required="" class="easyui-textbox">
+            </div>
+            <div class="fitem">
+                <span style="width:35%; display:inline-block;">TER Type</span>
+                <input style="width:60%;" name="ter_type" id="ter_type" required="" class="easyui-combobox">
             </div>
             <div class="fitem">
                 <span style="width:35%; display:inline-block;">Description</span>
@@ -151,6 +156,14 @@
                     });
                 }
             }]
+        });
+
+        $('#ter_type').combobox({
+            url: '<?php echo base_url('employee/marital_categories/readType'); ?>',
+            valueField: 'type',
+            textField: 'type',
+            prompt: 'Choose TER Type',
+            panelHeight: 'auto'
         });
     });
 </script>

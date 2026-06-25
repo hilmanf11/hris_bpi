@@ -11,7 +11,8 @@
             <th data-options="field:'departement_name',width:200,halign:'center'">Departement</th>
             <th data-options="field:'departement_sub_name',width:200,halign:'center'">Departement Sub</th>
             <th data-options="field:'date_sign',width:100,halign:'center'">Join Date</th>
-            <th data-options="field:'services',width:100,halign:'center'">Fit for Service</th>
+            <th data-options="field:'cutoff',width:100,halign:'center'">Cutoff</th>
+            <th data-options="field:'services',width:150,halign:'center'">Fit for Service</th>
             <th data-options="field:'position_name',width:100,halign:'center'">Position</th>
             <th data-options="field:'marital',width:100,halign:'center'">Marital</th>
             <th data-options="field:'tax_id',width:100,halign:'center'">Tax Id</th>
@@ -19,7 +20,7 @@
             <th data-options="field:'allowence',width:100,align:'center', formatter:numberformat">Allowence</th>
             <th data-options="field:'total',width:100,align:'center', formatter:numberformat">Total</th>
             <th data-options="field:'thr',width:100,align:'center', formatter:numberformat">THR</th>
-            <th data-options="field:'pph',width:100,align:'center', formatter:numberformat">PPH21</th>
+            <th data-options="field:'pph',width:100,align:'center', formatter:numberformat">TER</th>
             <th data-options="field:'total_thr',width:100,align:'center', formatter:numberformat">Total THR</th>
         </tr>
     </thead>
@@ -31,11 +32,22 @@
         <div title="Click this to hide the filter" data-options="onCollapse: function(){ $('#dg').datagrid('reload'); }" style="padding:10px; background:#F4F4F4;">
             <fieldset style="width: 99%; border:2px solid #d0d0d0; border-radius:4px;">
                 <legend><b>Form Filter Data</b></legend>
-                <div style="width: 50%; float: left;">
+                <div style="width: 32%; float: left;">
                     <div class="fitem">
                         <span style="width:30%; display:inline-block;">Period</span>
-                        <input style="width:28%;" name="filter_year" id="filter_year" value="<?= date("Y") ?>" panelHeight="auto" class="easyui-combobox">
+                        <input style="width:60%;" name="filter_year" id="filter_year" value="<?= date("Y") ?>" panelHeight="auto" class="easyui-combobox">
                     </div>
+                    <div class="fitem">
+                        <span style="width:30%; display:inline-block;">Cutoff</span>
+                        <input style="width:60%;" name="filter_cutoff" id="filter_cutoff" value="<?= date("Y-m-d") ?>" class="easyui-datebox" data-options="formatter:myformatter,parser:myparser, editable: false">
+                    </div>
+                    <div class="fitem">
+                        <span style="width:30%; display:inline-block;"></span>
+                        <a href="javascript:;" class="easyui-linkbutton" onclick="filter()"><i class="fa fa-search"></i> Filter Data</a>
+                        <a href="javascript:;" class="easyui-linkbutton" onclick="formula()"><i class="fa fa-percent"></i> Formula</a>
+                    </div>
+                </div>
+                <div style="width: 33%; float: left;">
                     <div class="fitem">
                         <span style="width:30%; display:inline-block;">Division</span>
                         <input style="width:60%;" id="filter_division" class="easyui-combobox">
@@ -48,12 +60,8 @@
                         <span style="width:30%; display:inline-block;">Departement Sub</span>
                         <input style="width:60%;" id="filter_departement_sub" class="easyui-combobox">
                     </div>
-                    <div class="fitem">
-                        <span style="width:30%; display:inline-block;"></span>
-                        <a href="javascript:;" class="easyui-linkbutton" onclick="filter()"><i class="fa fa-search"></i> Filter Data</a>
-                    </div>
                 </div>
-                <div style="width: 50%; float: left;">
+                <div style="width: 33%; float: left;">
                     <div class="fitem">
                         <span style="width:30%; display:inline-block;">Employee</span>
                         <input style="width:60%;" id="filter_employee" class="easyui-combogrid">
@@ -91,8 +99,40 @@
 <iframe id="printout" src="<?= base_url('payroll/thr/print') ?>" style="width: 100%;" hidden></iframe>
 
 <script>
+    function formula(){
+        Swal.fire({
+            width: 600,
+            html: `<div style="text-align:left;"><center><b style="font-size:16px !important;">Ketentuan THR</b><hr></center>
+                <b>Employee Type Contract & Permanent</b>
+                <ul>
+                    <li>Masa kerja diatas 1 tahun, Full 1 kali gaji THR (Salary + Allowence (FIX))</li>
+                    <li>Masa kerja 1 - 11 bulan, Proporsional THR (Salary + Allowence (FIX))</li>
+                    <li>Masa kerja belum 1 bulan, tidak dapat THR</li>
+                </ul>
+                <b>Employee Type Borongan</b>
+                <ul>
+                    <li>Masa kerja diatas 1 tahun full 1 kali gaji THR (25 hari kerja X upah per hari)</li>
+                    <li>Masa kerja 1 - 11 bulan, Proporsional THR (25 hari kerja X upah per hari)</li>
+                    <li>Masa kerja belum 1 bulan, tidak dapat THR</li>
+                </ul>
+                <b>Employee Type Magang & PKL</b>
+                <ul>
+                    <li>Masa kerja diatas 1 tahun full 1 kali gaji (Source -> THR Fee)</li>
+                    <li>Masa kerja 1 - 11 bulan, Proporsional THR (Source -> THR Fee)</li>
+                    <li>Masa kerja belum 1 bulan, tidak dapat THR</li>
+                </ul>`,
+            showClass: {
+                popup: `animate__animated animate__fadeInUp animate__faster`
+            },
+            hideClass: {
+                popup: `animate__animated animate__fadeOutDown animate__faster`
+            }
+        });
+    }
+
     function add() {
         var filter_year = $("#filter_year").combobox('getValue');
+        var filter_cutoff = $("#filter_cutoff").datebox('getValue');
         var filter_division = $("#filter_division").combobox('getValue');
         var filter_departement = $("#filter_departement").combobox('getValue');
         var filter_departement_sub = $("#filter_departement_sub").combobox('getValue');
@@ -141,9 +181,11 @@
                                                 "&filter_departement=" + filter_departement +
                                                 "&filter_departement_sub=" + filter_departement_sub +
                                                 '&filter_year=' + filter_year +
+                                                '&filter_cutoff=' + btoa(filter_cutoff) +
                                                 '&filter_employee_type=' + filter_employee_type +
                                                 '&filter_group=' + filter_group +
                                                 '&filter_employee=' + filter_employee;
+
                                             $.ajax({
                                                 url: "<?= base_url('payroll/thr/generatePayroll') ?>",
                                                 type: 'get',

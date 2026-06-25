@@ -482,13 +482,14 @@
                 type: "post",
                 url: "<?= base_url('employee/employees/readNumber') ?>",
                 data: "departement_id=" + departement_id + "&contract_id=" + contract_id + "&source_id=" + source_id + "&date_sign=" + btoa(date_sign),
-                dataType: "html",
+                dataType: "json",
                 success: function(number) {
-                    $("#number").textbox("setValue", number);
+                    $("#number").textbox("setValue", number.id);
                 }
             });
         }
     }
+    
     //ADD DATA
     function add() {
         $('#dlg_insert').dialog('open');

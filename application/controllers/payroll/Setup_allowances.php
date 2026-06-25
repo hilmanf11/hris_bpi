@@ -128,8 +128,8 @@ class Setup_allowances extends CI_Controller
             $allowance_name = $post['allowance_name'];
             $amount = $post['amount'];
 
-            $setup_allowances = $this->crud->read("setup_allowances", [], ["employee_id" => $employee_id]);
             $allowance = $this->crud->read('allowances', [], ["name" => $allowance_name]);
+            $setup_allowances = $this->crud->read("setup_allowances", [], ["employee_id" => $employee_id, "allowance_id" => @$allowance->id]);
 
             if (empty($setup_allowances)) {
                 if ($allowance) {
@@ -159,7 +159,7 @@ class Setup_allowances extends CI_Controller
                     "amount" => $amount,
                 );
 
-                $send = $this->crud->update('setup_allowances', ["employee_id" => $post['employee_id']], $postFinal);
+                $send = $this->crud->update('setup_allowances', ["employee_id" => $post['employee_id'], "allowance_id" => @$allowance->id], $postFinal);
                 echo $send;
             }
         } else {

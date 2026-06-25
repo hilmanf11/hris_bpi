@@ -334,7 +334,7 @@ class Attandances extends CI_Controller
                             'shift_days' => @$shift->days,
                         );
 
-                        $this->crud->update('attandances', ["id" => $attandance_in->id], $data_attandance);
+                        $this->crud->update('attandances', ["id" => $attandance_in->id], $data_attandance, "no_log");
                         echo json_encode(array("title" => "Updated", "message" => $employee->name . " | " . $date_in . " " . $time_in . " Update data Check In", "theme" => "success"));
                     } else {
                         $data_attandance = array(
@@ -348,7 +348,7 @@ class Attandances extends CI_Controller
                             'shift_days' => @$shift->days,
                             // 'time_out' => @$shift->end,
                         );
-                        $this->crud->create('attandances', $data_attandance);
+                        $this->crud->create('attandances', $data_attandance, "no_log");
                         echo json_encode(array("title" => "Created", "message" => $employee->name . " | " . $date_in . " " . $time_in . " Create data Check In", "theme" => "success"));
                     }
                     //echo json_encode(array("title" => "Warning", "message" => $data['number'] . " Next", "theme" => "error"));
@@ -396,7 +396,7 @@ class Attandances extends CI_Controller
                             'shift_detail' => @$shift->shift_name,
                             'shift_days' => @$shift->days,
                         );
-                        $this->crud->update('attandances', ["id" => $attandance_out->id], $data_attandance);
+                        $this->crud->update('attandances', ["id" => $attandance_out->id], $data_attandance, "no_log");
                         echo json_encode(array("title" => "Updated", "message" => $employee->name . " | " . $date_in . " " . $time_in . " Update data Check Out", "theme" => "success"));
                     } else {
                         $data_attandance = array(
@@ -410,7 +410,7 @@ class Attandances extends CI_Controller
                             'shift_detail' => @$shift->shift_name,
                             'shift_days' => @$shift->days,
                         );
-                        $this->crud->create('attandances', $data_attandance);
+                        $this->crud->create('attandances', $data_attandance, "no_log");
                         echo json_encode(array("title" => "Created", "message" => $employee->name . " | " . $date_in . " " . $time_in . " Create data Check Out", "theme" => "success"));
                     }
                     //echo json_encode(array("title" => "Warning", "message" => $data['number'] . " Next", "theme" => "error"));

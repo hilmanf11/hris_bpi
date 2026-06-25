@@ -109,7 +109,7 @@
             </div>
             <div class="fitem">
                 <span style="width:35%; display:inline-block;">Date Expired</span>
-                <input style="width:60%;" name="date_expired" data-options="formatter:myformatter,parser:myparser" class="easyui-datebox">
+                <input style="width:60%;" name="date_expired" id="date_expired" data-options="formatter:myformatter,parser:myparser" class="easyui-datebox">
             </div>
             <div class="fitem">
                 <span style="width:35%; display:inline-block;">Attachment</span>
@@ -132,7 +132,7 @@
         $('#dlg_insert').dialog('open');
         url_save = '<?= base_url('employee/agreements/create') ?>';
         $('#frm_insert').form('clear');
-        $('#date_sign').datebox('setValue', "<?= date("Y-m-d") ?>");
+        // $('#date_sign').datebox('setValue', "<?= date("Y-m-d") ?>");
     }
 
     //EDIT DATA
@@ -431,6 +431,13 @@
                     width: 200
                 }]
             ],
+            onSelect: function(val, row){
+                $("#contract_id").combobox('setValue', row.contract_id);
+                $("#group_id").combobox('setValue', row.group_id);
+                $("#position_id").combogrid('setValue', row.position_id);
+                $("#date_sign").datebox('setValue', row.date_sign);
+                $("#date_expired").datebox('setValue', row.date_expired);
+            }
         });
     });
 

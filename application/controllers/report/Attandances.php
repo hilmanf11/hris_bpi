@@ -72,6 +72,7 @@ class Attandances extends CI_Controller
 
     public function print($option = "")
     {
+        ob_start();
         if ($option == "excel") {
             $format  = date("Ymd");
             header("Content-type: application/vnd-ms-excel");
@@ -88,6 +89,7 @@ class Attandances extends CI_Controller
             $filter_permit_type = $this->input->get('filter_permit_type');
             $filter_status = $this->input->get('filter_status');
             $filter_group = $this->input->get('filter_group');
+            $filter_status_employee = $this->input->get('filter_status_employee');
             $username = $this->session->username;
 
             echo '<html>
@@ -104,7 +106,7 @@ class Attandances extends CI_Controller
             $this->db->join('privilege_groups i', "a.group_id = i.group_id and i.username = '$username'");
             $this->db->join('(SELECT employee_id, MAX(warning_letter) as warning_letter FROM warning_letters GROUP BY employee_id) f', 'a.id = f.employee_id', 'left');
             $this->db->where('a.deleted', 0);
-            $this->db->where('a.status', 0);
+            $this->db->where('a.status', $filter_status_employee);
             $this->db->like('a.division_id', $filter_division);
             $this->db->like('a.departement_id', $filter_departement);
             $this->db->like('a.departement_sub_id', $filter_departement_sub);
@@ -124,17 +126,6 @@ class Attandances extends CI_Controller
             $start = strtotime($filter_from);
             $finish = strtotime($filter_to);
             $no = 1;
-
-            $sts_workingday = 0;
-            $sts_ontime = 0;
-            $sts_uncheckin = 0;
-            $sts_unsetting = 0;
-            $sts_late = 0;
-            $sts_absence = 0;
-            $sts_weekend = 0;
-            $sts_changeday = 0;
-            $sts_permit = 0;
-            $sts_overtime = 0;
 
             foreach ($records as $record) {
                 if (!empty($record['warning_letter'])) {
@@ -225,6 +216,18 @@ class Attandances extends CI_Controller
                 $description = "";
                 $style = "";
                 $shiftName = "";
+
+                $sts_workingday = 0;
+                $sts_ontime = 0;
+                $sts_uncheckin = 0;
+                $sts_unsetting = 0;
+                $sts_late = 0;
+                $sts_absence = 0;
+                $sts_weekend = 0;
+                $sts_changeday = 0;
+                $sts_permit = 0;
+                $sts_overtime = 0;
+
                 for ($i = $start; $i <= $finish; $i += (60 * 60 * 24)) {
                     $working_date = date('Y-m-d', $i);
 
@@ -547,7 +550,12 @@ class Attandances extends CI_Controller
                 </div>';
 
                 echo $html;
+
+                ob_flush();
+                flush();
             }
         }
+
+        ob_end_flush();
     }
 }

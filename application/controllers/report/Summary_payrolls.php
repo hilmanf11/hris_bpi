@@ -40,6 +40,7 @@ class Summary_payrolls extends CI_Controller
         $filter_employee = $this->input->get('filter_employee');
         $filter_group = $this->input->get('filter_group');
         $username = $this->session->username;
+        // $filter_group_ex = explode(",", trim($filter_group));
 
         $period_start = date("Y-m", strtotime($filter_from));
         $period_end = date("Y-m", strtotime($filter_to));
@@ -68,11 +69,13 @@ class Summary_payrolls extends CI_Controller
         $this->db->where('a.deleted', 0);
         $this->db->where('a.period_start =', $period_start);
         $this->db->where('a.period_end =', $period_end);
+        if($filter_group != ""){
+            $this->db->where('b.group_id', $filter_group);
+        }
         $this->db->like('b.id', $filter_employee);
         $this->db->like('b.division_id', $filter_division);
         $this->db->like('b.departement_id', $filter_departement);
         $this->db->like('b.departement_sub_id', $filter_departement_sub);
-        $this->db->like('b.group_id', $filter_group);
         $this->db->group_by(array("c.id", "d.id", "e.id"));
         $this->db->order_by('c.name', 'ASC');
         $this->db->order_by('SUM(a.net_income)', 'ASC');
@@ -111,12 +114,14 @@ class Summary_payrolls extends CI_Controller
                 AND b.departement_id LIKE '%$filter_departement%'
                 AND b.departement_sub_id LIKE '%$filter_departement_sub%'
                 AND a.employee_id LIKE '%$filter_employee%'
-                AND c.group_id LIKE '%$filter_group%'
+                AND c.group_id = '$filter_group'
                 ORDER BY a.`name` ASC");
             $payrolls = $query->result_array();
 
+            $bpjsComs = $this->crud->reads('bpjs', ['status' => 0]);
+
             //Config Page
-            $rows = 20;
+            $rows = 40;
             $page = ceil(count($payrolls) / $rows);
 
             $division = $this->crud->read("divisions", [], ["id" => $filter_division]);
@@ -157,8 +162,14 @@ class Summary_payrolls extends CI_Controller
                     <body>';
             $no = 1;
             $hal = 1;
-            $subtotal = 0;
+            $grandtotal = 0;
             for ($i = 0; $i < $page; $i++) {
+
+                $htmlBpjsHeader = "";
+                foreach ($bpjsComs as $bpjsCom) {
+                    $htmlBpjsHeader .= '<th style="text-align:center;">'.$bpjsCom->number.'</th>';
+                }
+
                 $html .= '  <center>
                                 <div style="float: left; font-size: 12px; text-align: left;">
                                     <table style="width: 100%;">
@@ -218,29 +229,31 @@ class Summary_payrolls extends CI_Controller
                                     <th rowspan="2" style="text-align:center;">Employee Name</th>
                                     <th rowspan="2" style="text-align:center;">WD</th>
                                     <th rowspan="2" style="text-align:center;">Salary</th>
-                                    <th colspan="2" style="text-align:center;">Allowance</th>
-                                    <th rowspan="2" style="text-align:center;">Overtime</th>
-                                    <th rowspan="2" style="text-align:center;">Duration</th>
+                                    <th colspan="7" style="text-align:center;">Allowance</th>
+                                    <th colspan="2" style="text-align:center;">Overtime</th>
                                     <th rowspan="2" style="text-align:center;">Correction <br> Plus</th>
                                     <th rowspan="2" style="text-align:center;">Total <br> Income</th>
-                                    <th colspan="4" style="text-align:center;">Deduction</th>
+                                    <th colspan="8" style="text-align:center;">Deduction</th>
                                     <th rowspan="2" style="text-align:center;">Loan</th>
                                     <th rowspan="2" style="text-align:center;">Correction <br> Minus</th>
-                                    <th rowspan="2" style="text-align:center;">PPH21</th>
                                     <th rowspan="2" style="text-align:center;">Total<br>Deduction</th>
+                                    <th rowspan="2" style="text-align:center;">TER</th>
                                     <th rowspan="2" style="text-align:center;">Nett Income</th>
                                 </tr>
                                 <tr>
-                                    <th style="text-align:center;">Allowence</th>
-                                    <th style="text-align:center;">BPJS</th>
-                                    <th style="text-align:center;">BPJS</th>
-                                    <th style="text-align:center;">Deduction</th>
+                                    <th style="text-align:center;">Tnj. Tetap</th>
+                                    <th style="text-align:center;">Tnj. Tidak Tetap</th>';
+                                    $html .= $htmlBpjsHeader;
+                        $html .= '  <th style="text-align:center;">Hour</th>
+                                    <th style="text-align:center;">Amount</th>';
+                                    $html .= $htmlBpjsHeader;
+                        $html .= '  <th style="text-align:center;">Deduction</th>
                                     <th style="text-align:center;">ABS (DAY)</th>
                                     <th style="text-align:center;">ABS (AMT)</th>
                                 </tr>';
 
-                $offset = ($i * 20);
-                $query = $this->db->query("SELECT a.*, b.bank_branch, b.bank_no, b.national_id FROM payrolls a
+                $offset = ($i * 40);
+                $query = $this->db->query("SELECT a.*, b.bank_branch, b.bank_no, b.national_id, b.tax_id as npwp FROM payrolls a
                     JOIN employees b ON a.employee_id = b.id
                     JOIN privilege_groups c ON b.group_id = c.group_id and c.username = '$username' and c.status = '1'
                     WHERE a.period_start = '$period_start' and a.period_end = '$period_end'
@@ -248,15 +261,48 @@ class Summary_payrolls extends CI_Controller
                     AND b.departement_id LIKE '%$filter_departement%'
                     AND b.departement_sub_id LIKE '%$filter_departement_sub%'
                     AND a.employee_id LIKE '%$filter_employee%'
-                    AND c.group_id LIKE '%$filter_group%'
-                    ORDER BY a.`name` ASC LIMIT 20 OFFSET $offset");
+                    AND c.group_id = '$filter_group'
+                    ORDER BY a.`name` ASC LIMIT 40 OFFSET $offset");
                 $records = $query->result_array();
 
                 $total = 0;
                 foreach ($records as $record) {
 
+                    $html_bpjs_company = "";
+                    $total_bpjs_company = 0;
+                    foreach (json_decode($record['bpjs_company'], true) as $bpjs_company => $val_bpjs_company) {
+                        $html_bpjs_company .= '<td style="text-align:right;">' . number_format($val_bpjs_company) . '</td>';
+                        $total_bpjs_company += $val_bpjs_company;
+                    }
+
+                    $html_bpjs_employee = "";
+                    $total_bpjs_tk = 0;
+                    $total_bpjs_kes = 0;
+                    foreach (json_decode($record['bpjs_employee'], true) as $bpjs_employee => $val_bpjs_employee) {
+                        if ($bpjs_employee != "bpjs_employee") {
+                            $total_bpjs_tk += $val_bpjs_employee;
+                        } else {
+                            $total_bpjs_kes += $val_bpjs_employee;
+                        }
+
+                        $html_bpjs_employee .= '<td style="text-align:right;">' . number_format($val_bpjs_employee) . '</td>';
+                    }
+
                     $total_allowence = 0;
+                    $total_allowence_temp = 0;
+                    $total_allowence_fix = 0;
                     foreach (json_decode($record['allowence'], true) as $allowence => $val_allowence) {
+                        $allTemp = $this->crud->read("allowances", ["number" => $allowence], ["type" => "TEMPORARY"]);
+                        $allFix = $this->crud->read("allowances", ["number" => $allowence], ["type" => "FIX"]);
+                        
+                        if(!empty($allTemp)){
+                            $total_allowence_temp += (int) $val_allowence;
+                        }
+
+                        if(!empty($allFix)){
+                            $total_allowence_fix += (int) $val_allowence;
+                        }
+
                         $total_allowence += (int)$val_allowence;
                     }
 
@@ -276,68 +322,80 @@ class Summary_payrolls extends CI_Controller
                     }
 
                     $html .= '<tr>
-                                    <td>' . $no . '</td>
-                                    <td style="mso-number-format:\@;">' . $record['number'] . '</td>
-                                    <td style="mso-number-format:\@;">' . $record['national_id'] . '</td>
-                                    <td>' . $record['name'] . '</td>
-                                    <td>' . $record['attandance_wd'] . '</td>
-                                    <td style="text-align:right;">' . number_format($record['salary']) . '</td>
-                                    <td style="text-align:right;">' . number_format(($total_allowence)) . '</td>
-                                    <td style="text-align:right;">' . number_format(($record['bpjs_company_total'])) . '</td>
-                                    <td style="text-align:right;">' . number_format(($record['total_overtime_amount'])) . '</td>
-                                    <td style="text-align:right;">' . number_format(($record['total_overtime_convert']), 2) . '</td>
-                                    <td style="text-align:right;">' . number_format(($record['correction_plus'])) . '</td>
-                                    <td style="text-align:right;">' . number_format(($record['salary'] + $record['total_overtime_amount'] + $total_allowence + $record['correction_plus'] + $record['bpjs_company_total'])) . '</td>
-                                    <td style="text-align:right;">' . number_format(($record['bpjs_employee_total'] + $record['bpjs_company_total'])) . '</td>
-                                    <td style="text-align:right;">' . number_format($total_deduction) . '</td>
-                                    <td style="text-align:right;">' . number_format($record['deduction_absence'] + $total_ip) . '</td>
-                                    <td style="text-align:right;">' . number_format($record['deduction_absence_amount'] + $total_ip_amount) . '</td>
-                                    <td style="text-align:right;">' . number_format(($record['loan_cooperative'] + $record['loan_bank'] + $record['loan_other'])) . '</td>
-                                    <td style="text-align:right;">' . number_format($record['correction_minus']) . '</td>
-                                    <td style="text-align:right;">' . number_format($record['pph']) . '</td>
-                                    <td style="text-align:right;">' . number_format($record['deduction_absence_amount'] + $record['bpjs_employee_total'] + $record['bpjs_company_total'] + $record['loan_cooperative'] + $record['loan_bank'] + $record['loan_other'] + $record['correction_minus'] + $total_ip_amount + $total_deduction) . '</td>
-                                    <td style="text-align:right;">' . number_format(($record['net_income'])) . '</td>
-                                </tr>';
+                                <td>' . $no . '</td>
+                                <td style="mso-number-format:\@;">' . $record['number'] . '</td>
+                                <td style="mso-number-format:\@;">' . $record['national_id'] . '</td>
+                                <td>' . $record['name'] . '</td>
+                                <td>' . $record['attandance_wd'] . '</td>
+                                <td style="text-align:right;">' . number_format($record['salary']) . '</td>
+                                <td style="text-align:right;">' . number_format($total_allowence_fix) . '</td>
+                                <td style="text-align:right;">' . number_format($total_allowence_temp) . '</td>
+                                ' . $html_bpjs_company . '
+                                <td style="text-align:right;">' . number_format($record['total_overtime_convert'], 2) . '</td>
+                                <td style="text-align:right;">' . number_format($record['total_overtime_amount']) . '</td>
+                                <td style="text-align:right;">' . number_format($record['correction_plus']) . '</td>
+                                <td style="text-align:right;">' . number_format(($record['salary'] + $total_allowence + $record['correction_plus'] + $record['bpjs_company_total'] + $record['total_overtime_amount'])) . '</td>
+                                ' . $html_bpjs_employee . '
+                                <td style="text-align:right;">' . number_format($total_deduction) . '</td>
+                                <td style="text-align:right;">' . number_format($record['deduction_absence'] + $total_ip) . '</td>
+                                <td style="text-align:right;">' . number_format($record['deduction_absence_amount'] + $total_ip_amount) . '</td>
+                                <td style="text-align:right;">' . number_format(($record['loan_cooperative'] + $record['loan_bank'] + $record['loan_other'])) . '</td>
+                                <td style="text-align:right;">' . number_format($record['correction_minus']) . '</td>
+                                <td style="text-align:right;">' . number_format($record['deduction_absence_amount'] + $record['bpjs_employee_total'] + $record['bpjs_company_total'] + $record['loan_cooperative'] + $record['loan_bank'] + $record['loan_other'] + $record['correction_minus'] + $total_ip_amount + $total_deduction) . '</td>
+                                <td style="text-align:right;">' . number_format($record['ter']) . '</td>
+                                <td style="text-align:right;">' . number_format(($record['net_income'])) . '</td>
+                            </tr>';
                     $total += $record['net_income'];
                     $no++;
                 }
 
                 $html .= '  <tr>
-                                <th style="text-align:right;" colspan="19">GRAND TOTAL</th>
+                                <th style="text-align:right;" colspan="29">SUB TOTAL</th>
                                 <th style="text-align:right;">' . number_format($total) . '</th>
                             </tr>';
-                $html .= '</table>
-                            <br>
-                            <center>
-                                <table id="customers" style="width:70%;">
-                                    <tr>
-                                        <th rowspan="2" width="100" style="text-align:center;">APPROVED</th>
-                                        <th colspan="2" style="text-align:center;">CONFIRM OK</th>
-                                        <th rowspan="2" width="100" style="text-align:center;">PREPARED</th>
-                                    </tr>
-                                    <tr>
-                                        <th width="100" style="text-align:center;">COST CONTROL</th>
-                                        <th width="100" style="text-align:center;">HRD</th>
-                                    </tr>
-                                    <tr>
-                                        <td style="height:60px;"></td>
-                                        <td style="height:60px;"></td>
-                                        <td style="height:60px;"></td>
-                                        <td style="height:60px;"></td>
-                                    </tr>
-                                    <tr>
-                                        <th style="text-align:center;">BOD</th>
-                                        <th style="text-align:center;">ASSISTANT MANAGER</th>
-                                        <th style="text-align:center;">MANAGER</th>
-                                        <th style="text-align:center;">PAYROLL STAFF</th>
-                                    </tr>
-                                </table>
-                            </center><br><br><br>';
+                            
                 $hal++;
                 if (($i + 1) != $page) {
+                    $html .= '</table><br>';
                     $html .= '<div style="page-break-after:always;"></div>';
                 }
+
+                $grandtotal += $total;
             }
+
+            $html .= '  <tr>
+                            <th style="text-align:right;" colspan="29">GRAND TOTAL</th>
+                            <th style="text-align:right;">' . number_format($grandtotal) . '</th>
+                        </tr>';
+            $html .= '</table><br>';
+
+            $html .= '  <br>
+                        <center>
+                            <table id="customers" style="width:70%;">
+                                <tr>
+                                    <th rowspan="2" width="100" style="text-align:center;">APPROVED</th>
+                                    <th colspan="2" style="text-align:center;">CONFIRM OK</th>
+                                    <th rowspan="2" width="100" style="text-align:center;">PREPARED</th>
+                                </tr>
+                                <tr>
+                                    <th width="100" style="text-align:center;">COST CONTROL</th>
+                                    <th width="100" style="text-align:center;">HRD</th>
+                                </tr>
+                                <tr>
+                                    <td style="height:60px;"></td>
+                                    <td style="height:60px;"></td>
+                                    <td style="height:60px;"></td>
+                                    <td style="height:60px;"></td>
+                                </tr>
+                                <tr>
+                                    <th style="text-align:center;">BOD</th>
+                                    <th style="text-align:center;">ASSISTANT MANAGER</th>
+                                    <th style="text-align:center;">ASSISTANT MANAGER</th>
+                                    <th style="text-align:center;">PAYROLL STAFF</th>
+                                </tr>
+                            </table>
+                        </center><br><br><br>';
+
             $html .= '</body></html>';
             echo $html;
         }
@@ -359,6 +417,7 @@ class Summary_payrolls extends CI_Controller
             $filter_departement_sub = $this->input->get('filter_departement_sub');
             $filter_employee = $this->input->get('filter_employee');
             $filter_group = $this->input->get('filter_group');
+            // $filter_group_ex = explode(",", $filter_group);
             $username = $this->session->username;
 
             $period_start = date("Y-m", strtotime($filter_from));
@@ -384,11 +443,13 @@ class Summary_payrolls extends CI_Controller
             $this->db->where('a.deleted', 0);
             $this->db->where('a.period_start =', $period_start);
             $this->db->where('a.period_end =', $period_end);
+            if($filter_group != ""){
+                $this->db->where('b.group_id', $filter_group);
+            }
             $this->db->like('b.id', $filter_employee);
             $this->db->like('b.division_id', $filter_division);
             $this->db->like('b.departement_id', $filter_departement);
             $this->db->like('b.departement_sub_id', $filter_departement_sub);
-            $this->db->like('b.group_id', $filter_group);
             $this->db->group_by(array("c.id", "d.id", "e.id"));
             $this->db->order_by('c.name', 'ASC');
             $this->db->order_by('SUM(a.net_income)', 'ASC');
@@ -427,11 +488,13 @@ class Summary_payrolls extends CI_Controller
                 $this->db->where('a.deleted', 0);
                 $this->db->where('a.period_start =', $period_start);
                 $this->db->where('a.period_end =', $period_end);
+                if($filter_group != ""){
+                    $this->db->where('b.group_id', $filter_group);
+                }
                 $this->db->like('b.id', $filter_employee);
                 $this->db->like('b.division_id', $filter_division);
                 $this->db->like('b.departement_id', $filter_departement);
                 $this->db->like('b.departement_sub_id', $filter_departement_sub);
-                $this->db->like('b.group_id', $filter_group);
                 $this->db->group_by(array("c.id", "d.id", "e.id"));
                 $this->db->order_by('c.name', 'ASC');
                 $this->db->order_by('SUM(a.net_income)', 'ASC');
@@ -524,6 +587,7 @@ class Summary_payrolls extends CI_Controller
             $filter_departement_sub = $this->input->get('filter_departement_sub');
             $filter_employee = $this->input->get('filter_employee');
             $filter_group = $this->input->get('filter_group');
+            // $filter_group_ex = explode(",", $filter_group);
             $username = $this->session->username;
 
             $period_start = date("Y-m", strtotime($filter_from));
@@ -532,12 +596,12 @@ class Summary_payrolls extends CI_Controller
             $division = $this->crud->read("divisions", [], ["id" => $filter_division]);
             $departement = $this->crud->read("departements", [], ["id" => $filter_departement]);
             $departement_sub = $this->crud->read("departement_subs", [], ["id" => $filter_departement_sub]);
-            $group = $this->crud->read("groups", [], ["id" => $filter_group]);
-            $bpjs = $this->crud->reads('bpjs', ['status' => 0]);
+            
+            $bpjsComs = $this->crud->reads('bpjs', ['status' => 0]);
 
-            $html_bpjs = "";
-            foreach ($bpjs as $bpjs_data) {
-                $html_bpjs .= '<th>' . $bpjs_data->number . '</th>';
+            $htmlBpjsHeader = "";
+            foreach ($bpjsComs as $bpjsCom) {
+                $htmlBpjsHeader .= '<th style="text-align:center;">'.$bpjsCom->number.'</th>';
             }
 
             if (empty($division->id)) {
@@ -556,12 +620,6 @@ class Summary_payrolls extends CI_Controller
                 $departement_sub_name = "ALL";
             } else {
                 $departement_sub_name = $departement_sub->name;
-            }
-
-            if (empty($group->id)) {
-                $group_name = "ALL";
-            } else {
-                $group_name = $group->name;
             }
 
             //Config
@@ -615,11 +673,6 @@ class Summary_payrolls extends CI_Controller
                                     <td>:</td>
                                     <td><b>' . $departement_sub_name . '</b></td>
                                 </tr>
-                                <tr>
-                                    <td>Group</td>
-                                    <td>:</td>
-                                    <td><b>' . $group_name . '</b></td>
-                                </tr>
                             </table>
                             <br>
                             <table id="customers" border="1">
@@ -628,58 +681,67 @@ class Summary_payrolls extends CI_Controller
                                     <th rowspan="2" style="text-align:center;">Employee ID</th>
                                     <th rowspan="2" style="text-align:center;">National ID</th>
                                     <th rowspan="2" style="text-align:center;">Employee Name</th>
+                                    <th rowspan="2" style="text-align:center;">NPWP</th>
+                                    <th rowspan="2" style="text-align:center;">Position</th>
+                                    <th rowspan="2" style="text-align:center;">Marital</th>
                                     <th rowspan="2" style="text-align:center;">WD</th>
                                     <th rowspan="2" style="text-align:center;">Salary</th>
-                                    <th colspan="6" style="text-align:center;">Allowance</th>
-                                    <th rowspan="2" style="text-align:center;">Overtime</th>
-                                    <th rowspan="2" style="text-align:center;">Duration</th>
+                                    <th colspan="7" style="text-align:center;">Allowance</th>
+                                    <th colspan="2" style="text-align:center;">Overtime</th>
                                     <th rowspan="2" style="text-align:center;">Correction <br> Plus</th>
                                     <th rowspan="2" style="text-align:center;">Total <br> Income</th>
                                     <th colspan="8" style="text-align:center;">Deduction</th>
+                                    <th rowspan="2" style="text-align:center;">BPJS<br>Company</th>
                                     <th rowspan="2" style="text-align:center;">Loan</th>
                                     <th rowspan="2" style="text-align:center;">Correction <br> Minus</th>
-                                    <th rowspan="2" style="text-align:center;">PPH21</th>
+                                    <th rowspan="2" style="text-align:center;">TER</th>
                                     <th rowspan="2" style="text-align:center;">Total<br>Deduction</th>
                                     <th rowspan="2" style="text-align:center;">Nett Income</th>
                                     <th rowspan="2" style="text-align:center;">BPJS TK</th>
                                     <th rowspan="2" style="text-align:center;">BPJS KES</th>
+                                    <th rowspan="2" style="text-align:center;">BPJS TK<br>(Rate)</th>
+                                    <th rowspan="2" style="text-align:center;">BPJS KES<br>(Rate)</th>
+                                    <th rowspan="2" style="text-align:center;">Bruto<br>Income</th>
                                 </tr>
                                 <tr>
-                                    <th style="text-align:center;">Allowence</th>
-                                    <th style="text-align:center;">JHT</th>
-                                    <th style="text-align:center;">JKM</th>
-                                    <th style="text-align:center;">JP</th>
-                                    <th style="text-align:center;">BPJS</th>
-                                    <th style="text-align:center;">JKK</th>
-                                    <th style="text-align:center;">JHT</th>
-                                    <th style="text-align:center;">JKM</th>
-                                    <th style="text-align:center;">JP</th>
-                                    <th style="text-align:center;">BPJS</th>
-                                    <th style="text-align:center;">JKK</th>
-                                    <th style="text-align:center;">Deduction</th>
+                                    <th style="text-align:center;">Tnj. Tetap</th>
+                                    <th style="text-align:center;">Tnj. Tidak Tetap</th>';
+                        $html .= $htmlBpjsHeader;
+                        $html .= '  <th style="text-align:center;">Hour</th>
+                                    <th style="text-align:center;">Amount</th>';
+                        $html .= $htmlBpjsHeader;
+                        $html .= '  <th style="text-align:center;">Deduction</th>
                                     <th style="text-align:center;">ABS (DAY)</th>
                                     <th style="text-align:center;">ABS (AMT)</th>
                                 </tr>';
 
-            $query = $this->db->query("SELECT a.*, b.bank_branch, b.bank_no, b.national_id FROM payrolls a
-                    JOIN employees b ON a.employee_id = b.id
-                    JOIN privilege_groups c ON b.group_id = c.group_id and c.username = '$username' and c.status = '1'
-                    WHERE a.period_start = '$period_start' and a.period_end = '$period_end'
-                    AND b.division_id LIKE '%$filter_division%'
-                    AND b.departement_id LIKE '%$filter_departement%'
-                    AND b.departement_sub_id LIKE '%$filter_departement_sub%'
-                    AND a.employee_id LIKE '%$filter_employee%'
-                    AND c.group_id LIKE '%$filter_group%'
-                    ORDER BY a.`name` ASC");
-            $records = $query->result_array();
+            $this->db->select('a.*, b.bank_branch, b.bank_no, b.national_id, b.tax_id as npwp');
+            $this->db->from('payrolls a');
+            $this->db->join('employees b', "a.employee_id = b.id");
+            $this->db->join('privilege_groups c', "b.group_id = c.group_id and c.username = '$username' and c.status = '1'");
+            $this->db->join('groups d', "b.group_id = d.id");
+            $this->db->where('a.deleted', 0);
+            $this->db->where('a.period_start =', $period_start);
+            $this->db->where('a.period_end =', $period_end);
+            if($filter_group != ""){
+                $this->db->where('b.group_id', $filter_group);
+            }
+            $this->db->like('a.employee_id', $filter_employee);
+            $this->db->like('b.division_id', $filter_division);
+            $this->db->like('b.departement_id', $filter_departement);
+            $this->db->like('b.departement_sub_id', $filter_departement_sub);
+            $this->db->order_by('a.name', 'ASC');
+            $records = $this->db->get()->result_array();
 
             $no = 1;
             $total = 0;
             foreach ($records as $record) {
 
                 $html_bpjs_company = "";
+                $total_bpjs_company = 0;
                 foreach (json_decode($record['bpjs_company'], true) as $bpjs_company => $val_bpjs_company) {
                     $html_bpjs_company .= '<td style="text-align:right;">' . number_format($val_bpjs_company) . '</td>';
+                    $total_bpjs_company += $val_bpjs_company;
                 }
 
                 $html_bpjs_employee = "";
@@ -696,7 +758,20 @@ class Summary_payrolls extends CI_Controller
                 }
 
                 $total_allowence = 0;
+                $total_allowence_temp = 0;
+                $total_allowence_fix = 0;
                 foreach (json_decode($record['allowence'], true) as $allowence => $val_allowence) {
+                    $allTemp = $this->crud->read("allowances", ["number" => $allowence], ["type" => "TEMPORARY"]);
+                    $allFix = $this->crud->read("allowances", ["number" => $allowence], ["type" => "FIX"]);
+                    
+                    if(!empty($allTemp)){
+                        $total_allowence_temp += (int) $val_allowence;
+                    }
+
+                    if(!empty($allFix)){
+                        $total_allowence_fix += (int) $val_allowence;
+                    }
+
                     $total_allowence += (int)$val_allowence;
                 }
 
@@ -715,37 +790,53 @@ class Summary_payrolls extends CI_Controller
                     $total_ip_amount += (int)$val_ip_amount;
                 }
 
+                if($record['group_name'] == "GOLONGAN I"){
+                    $total_bpjs_tk_rate = 0;
+                    $total_bpjs_kes_rate = 0;
+                }else{
+                    $total_bpjs_tk_rate = ($record['salary'] + $total_allowence_fix);
+                    $total_bpjs_kes_rate = ($record['salary'] + $total_allowence_fix);
+                }
+
                 $html .= '<tr>
                             <td>' . $no . '</td>
                             <td style="mso-number-format:\@;">' . $record['number'] . '</td>
                             <td style="mso-number-format:\@;">' . $record['national_id'] . '</td>
                             <td>' . $record['name'] . '</td>
+                            <td>' . $record['npwp'] . '</td>
+                            <td>' . $record['position_name'] . '</td>
+                            <td>' . $record['marital'] . '</td>
                             <td>' . $record['attandance_wd'] . '</td>
                             <td style="text-align:right;">' . number_format($record['salary']) . '</td>
-                            <td style="text-align:right;">' . number_format($total_allowence) . '</td>
+                            <td style="text-align:right;">' . number_format($total_allowence_fix) . '</td>
+                            <td style="text-align:right;">' . number_format($total_allowence_temp) . '</td>
                             ' . $html_bpjs_company . '
+                            <td style="text-align:right;">' . number_format($record['total_overtime_convert'], 2) . '</td>
                             <td style="text-align:right;">' . number_format($record['total_overtime_amount']) . '</td>
-                            <td style="text-align:right;">' . number_format($record['total_overtime_convert'], 2, ",", ".") . '</td>
                             <td style="text-align:right;">' . number_format($record['correction_plus']) . '</td>
-                            <td style="text-align:right;">' . number_format(($record['salary'] + $record['total_overtime_amount'] + $total_allowence + $record['correction_plus'] + $record['bpjs_company_total'])) . '</td>
+                            <td style="text-align:right;">' . number_format(($record['salary'] + $total_allowence + $record['correction_plus'] + $record['bpjs_company_total'])) . '</td>
                             ' . $html_bpjs_employee . '
                             <td style="text-align:right;">' . number_format($total_deduction) . '</td>
                             <td style="text-align:right;">' . number_format($record['deduction_absence'] + $total_ip) . '</td>
                             <td style="text-align:right;">' . number_format($record['deduction_absence_amount'] + $total_ip_amount) . '</td>
+                            <td style="text-align:right;">' . number_format($total_bpjs_company) . '</td>
                             <td style="text-align:right;">' . number_format(($record['loan_cooperative'] + $record['loan_bank'] + $record['loan_other'])) . '</td>
                             <td style="text-align:right;">' . number_format($record['correction_minus']) . '</td>
-                            <td style="text-align:right;">' . number_format($record['pph']) . '</td>
+                            <td style="text-align:right;">' . number_format($record['ter']) . '</td>
                             <td style="text-align:right;">' . number_format($record['deduction_absence_amount'] + $record['bpjs_employee_total'] + $record['bpjs_company_total'] + $record['loan_cooperative'] + $record['loan_bank'] + $record['loan_other'] + $record['correction_minus'] + $total_ip_amount + $total_deduction) . '</td>
                             <td style="text-align:right;">' . number_format(($record['net_income'])) . '</td>
                             <td style="text-align:right;">' . number_format(($total_bpjs_tk)) . '</td>
                             <td style="text-align:right;">' . number_format(($total_bpjs_kes)) . '</td>
+                            <td style="text-align:right;">' . number_format(($total_bpjs_tk_rate)) . '</td>
+                            <td style="text-align:right;">' . number_format(($total_bpjs_kes_rate)) . '</td>
+                            <td style="text-align:right;">' . number_format(($record['salary'] + $total_allowence)) . '</td>
                         </tr>';
                 $total += $record['net_income'];
                 $no++;
             }
 
             $html .= '  <tr>
-                            <th style="text-align:right;" colspan="27">GRAND TOTAL</th>
+                            <th style="text-align:right;" colspan="33">GRAND TOTAL</th>
                             <th style="text-align:right;">' . number_format($total) . '</th>
                         </tr>';
             $html .= '</body></html>';

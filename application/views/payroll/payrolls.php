@@ -18,6 +18,8 @@
             <th rowspan="2" data-options="field:'shift_name',width:100,halign:'center'">Shift</th>
             <th rowspan="2" data-options="field:'level',width:80,halign:'center'">Level</th>
             <th rowspan="2" data-options="field:'marital',width:80,halign:'center'">Marital</th>
+            <th rowspan="2" data-options="field:'ter_number',width:80,halign:'center'">TER Code</th>
+            <th rowspan="2" data-options="field:'ter_persentase',width:80,halign:'center'">TER %</th>
             <th rowspan="2" data-options="field:'group_name',width:100,halign:'center'">Group</th>
             <th rowspan="2" data-options="field:'national_id',width:150,halign:'center'">National ID</th>
             <th rowspan="2" data-options="field:'tax_id',width:150,halign:'center'">NPWP</th>
@@ -42,7 +44,8 @@
             <th colspan="<?= count($bpjs) ?>">BPJS Employee</th>
             <th rowspan="2" data-options="field:'bpjs_employee_total',width:100,align:'center', formatter:numberformat">Total BPJS<br>Employee</th>
             <!-- <th rowspan="2" data-options="field:'netto',width:100,align:'center'">Netto</th> -->
-            <th rowspan="2" data-options="field:'pph',width:100,align:'center', formatter:numberformat">PPH21</th>
+            <th hidden rowspan="2" data-options="field:'pph',width:100,align:'center', formatter:numberformat">PPH21</th>
+            <th rowspan="2" data-options="field:'ter',width:100,align:'center', formatter:numberformat">TER</th>
             <th rowspan="2" data-options="field:'net_income',width:100,align:'center', formatter:numberformat">Net Income</th>
         </tr>
         <tr>
@@ -60,8 +63,13 @@
             }
 
             foreach ($bpjs as $bpjs_data) {
+                if($bpjs_data->number == "BPJS"){
+                    $field_name = $bpjs_data->name;
+                }else{
+                    $field_name = $bpjs_data->number;
+                }
                 $bpjs_field = "field:'" . strtolower($bpjs_data->number) . "_company',width:100,align:'center'";
-                echo '<th data-options="' . $bpjs_field . ', formatter:numberformat">' . $bpjs_data->number . '</th>';
+                echo '<th data-options="' . $bpjs_field . ', formatter:numberformat">' . $field_name . '</th>';
             }
             ?>
             <th data-options="field:'overtime_weekday',width:80,align:'center', formatter:numberformat">Day</th>
@@ -94,8 +102,13 @@
             <th data-options="field:'loan_other',width:100,align:'center', formatter:numberformat">Other</th>
             <?php
             foreach ($bpjs as $bpjs_data) {
+                if($bpjs_data->number == "BPJS"){
+                    $field_name = $bpjs_data->name;
+                }else{
+                    $field_name = $bpjs_data->number;
+                }
                 $bpjs_field = "field:'" . strtolower($bpjs_data->number) . "_employee',width:100,align:'center'";
-                echo '<th data-options="' . $bpjs_field . ', formatter:numberformat">' . $bpjs_data->number . '</th>';
+                echo '<th data-options="' . $bpjs_field . ', formatter:numberformat">' . $field_name . '</th>';
             }
             ?>
         </tr>
@@ -150,6 +163,7 @@
     </div>
 
     <?= $button ?>
+    <a href="javascript:;" class="easyui-linkbutton" data-options="plain:true" onclick="excel2()"><i class="fa fa-file"></i> Export Excel 2</a>
 </div>
 
 <div id="dlg_generate" class="easyui-dialog" title="Generating Data" data-options="closed: true,modal:true,closable: false" style="width: 500px; padding:10px; top: 20px;">
@@ -446,6 +460,32 @@
             toastr.warning("Please Enter Cut Off Period");
         } else {
             window.location.assign('<?= base_url('payroll/payrolls/print/excel') ?>' + url);
+        }
+    }
+
+    function excel2() {
+        var filter_from = $("#filter_from").combogrid('getValue');
+        var filter_to = $("#filter_to").textbox('getValue');
+        var filter_division = $("#filter_division").combobox('getValue');
+        var filter_departement = $("#filter_departement").combobox('getValue');
+        var filter_departement_sub = $("#filter_departement_sub").combobox('getValue');
+        var filter_employee = $("#filter_employee").combogrid('getValue');
+        var filter_employee_type = $("#filter_employee_type").combobox('getValue');
+        var filter_group = $("#filter_group").combobox('getValue');
+
+        var url = "?filter_from=" + filter_from +
+            "&filter_to=" + filter_to +
+            "&filter_division=" + filter_division +
+            "&filter_departement=" + filter_departement +
+            "&filter_departement_sub=" + filter_departement_sub +
+            "&filter_employee=" + filter_employee +
+            "&filter_employee_type=" + filter_employee_type +
+            "&filter_group=" + filter_group;
+
+        if (filter_from == "" || filter_to == "") {
+            toastr.warning("Please Enter Cut Off Period");
+        } else {
+            window.location.assign('<?= base_url('payroll/payrolls/print2/excel') ?>' + url);
         }
     }
     //RELOAD

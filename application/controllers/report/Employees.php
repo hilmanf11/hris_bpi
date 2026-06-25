@@ -29,6 +29,38 @@ class Employees extends CI_Controller
         }
     }
 
+    public function readService($dateSign = "")
+    {
+        if ($dateSign == "") {
+            $date = $this->input->post('date');
+        } else {
+            $date = $dateSign;
+        }
+
+        $start  = date_create($date);
+        $end = date_create(); // waktu sekarang
+        $diff  = date_diff($start, $end);
+        $d = $diff->d . ' Days ';
+
+        if ($diff->y == 0) {
+            $y = '';
+        } else {
+            $y = $diff->y . ' Years, ';
+        }
+
+        if ($diff->m == 0) {
+            $m = '';
+        } else {
+            $m = $diff->m . ' Month, ';
+        }
+
+        if ($dateSign == "") {
+            echo $y . $m . $d;
+        } else {
+            return $y . $m . $d;
+        }
+    }
+
     public function print($option = "")
     {
         if ($option == "excel") {
@@ -134,7 +166,17 @@ class Employees extends CI_Controller
                     $content = "<tr>
                                     <td>" . $no . "</td>";
                     for ($z = 0; $z < count($form['filter_column']); $z++) {
-                        $content .= "<td class='str'>" . $data[$form['filter_column'][$z]] . "</td>";
+                        if($form['filter_column'][$z] == "service"){
+                            $content .= "<td class='str'>" . $this->readService($data['date_sign']) . "</td>";
+                        }elseif($form['filter_column'][$z] == "mobile_phone"){
+                            if($data[$form['filter_column'][$z]] == ""){
+                                $content .= "<td style='mso-number-format:\@;'>" . $data[$form['filter_column'][$z]] . "</td>";
+                            }else{
+                                $content .= "<td style='mso-number-format:\@;'>0" . $data[$form['filter_column'][$z]] . "</td>";
+                            }
+                        }else{
+                            $content .= "<td style='mso-number-format:\@;'>" . $data[$form['filter_column'][$z]] . "</td>";
+                        }
                     }
 
                     $content .= "   <td " . $style . ">" . $status . "</td>

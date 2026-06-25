@@ -31,6 +31,7 @@ class Attandance_days extends CI_Controller
 
     public function print($option = "")
     {
+        ob_start();
         if ($option == "excel") {
             $format  = date("Ymd");
             header("Content-type: application/vnd-ms-excel");
@@ -255,9 +256,14 @@ class Attandance_days extends CI_Controller
                     $no++;
                 }
                 echo $html;
+
+                ob_flush();
+                flush();
             }
 
             echo '</table></body></html>';
         }
+
+        ob_end_flush();
     }
 }

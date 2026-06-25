@@ -132,8 +132,6 @@ class Sourcing_fee extends CI_Controller
                                 <th width="20">No</th>
                                 <th style="text-align:center;">Employee ID</th>
                                 <th style="text-align:center;">Employee Name</th>
-                                <th style="text-align:center;">Fit Of Service</th>
-                                <th style="text-align:center;">WD</th>
                                 <th style="text-align:center;">Amount</th>
                             </tr>';
 
@@ -165,14 +163,13 @@ class Sourcing_fee extends CI_Controller
                         $wd = $employee['attandance_wd'];
                     }
 
-                    $fee = (($record['sourcing_fee'] / $hkw) * $wd);
+                    // $fee = (($record['sourcing_fee'] / $hkw) * $wd);
+                    $fee = $record['sourcing_fee'];
 
                     $html .= '  <tr>
                                     <td>' . $no . '</td>
                                     <td style="mso-number-format:\@;">' . $employee['number'] . '</td>
                                     <td>' . $employee['name'] . '</td>
-                                    <td>' . $services . '</td>
-                                    <td>' . $wd . '</td>
                                     <td style="text-align:right;">' . round($fee) . '</td>
                                 </tr>';
                     $total += $fee;
@@ -180,7 +177,7 @@ class Sourcing_fee extends CI_Controller
                 }
 
                 $html .= '  <tr>
-                                <th colspan="5" style="text-align:right;">Grand Total</th>
+                                <th colspan="3" style="text-align:right;">Grand Total</th>
                                 <th style="text-align:right;">' . round($total) . '</th>
                             </tr>';
 

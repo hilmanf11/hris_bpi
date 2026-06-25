@@ -231,6 +231,7 @@ class Cash_carries extends CI_Controller
         $this->db->from('employees b');
         $this->db->join('groups c', 'b.group_id = c.id');
         $this->db->join('attandances a', "a.number = b.number and a.date_in = '$period'", 'left');
+        $this->db->where('b.status', 0);
         $this->db->where('c.overtime_duration >', 0);
         $this->db->like('b.division_id', $division_id);
         $this->db->like('b.departement_id', $departement_id);
@@ -495,6 +496,7 @@ class Cash_carries extends CI_Controller
 
         $this->db->select('id as employee_id, name as employee_name');
         $this->db->from('employees');
+        $this->db->where('status', 0);
         $this->db->where('departement_id', $departement_id);
         $this->db->order_by('name', 'ASC');
         $records = $this->db->get()->result_array();

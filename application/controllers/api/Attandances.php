@@ -1,4 +1,6 @@
 <?php
+header('Content-Type: application/json; charset=utf-8');
+
 date_default_timezone_set("Asia/Bangkok");
 defined('BASEPATH') or exit('No direct script access allowed');
 
@@ -11,7 +13,7 @@ class Attandances extends CI_Controller
         $this->load->helper(array('form', 'url'));
         $this->load->library('form_validation');
         $this->load->library('session');
-        $this->load->model('crud');
+        $this->load->model('mobile');
     }
 
     //HALAMAN UTAMA
@@ -20,174 +22,305 @@ class Attandances extends CI_Controller
         show_error("Cannot Process your request");
     }
 
-    public function dashboard($token = "")
+    public function reads($api_key = "", $limit = 31)
     {
-        if ($token != "") {
-            $users_m = $this->crud->read("users_m", [], ["token" => $token]);
-            $employee = $this->crud->read("employees", [], ["number" => $users_m->number]);
-            $number = $users_m->number;
-            $month = date("Y-m");
 
-            $start = strtotime($month . '-01');
-            $finish = strtotime(date("Y-m-d"));
+        if ($api_key != "") {
+            $user = $this->mobile->read("users", [], ["api_key" => $api_key]);
 
-            $permits = 0;
-            $working = 0;
-            $absence = 0;
-            $late = 0;
-            for ($i = $start; $i <= $finish; $i += (60 * 60 * 24)) {
-                $working_date = date('Y-m-d', $i);
+            if ($user) {
+                $attandances = $this->mobile->query("SELECT date_in, date_out, time_in, time_out, foto_in, foto_out FROM attandances WHERE number = '$user->number' ORDER BY date_in DESC LIMIT $limit");
 
-                if (date('w', $i) !== '0' && date('w', $i) !== '6') {
-                    $status_working = "WEEKDAY";
-                } else {
-                    $status_working = "WEEKEND";
+                $datas = array();
+                foreach ($attandances as $attandance) {
+                    if (!empty($attandance->foto_in)) {
+                        $folder = date("Ym", strtotime($attandance->date_in));
+                        $foto_in = 'assets/document/attendance/' . $folder . '/' . $attandance->foto_in;
+                    } else {
+                        $foto_in = null;
+                    }
+
+                    if (!empty($attandance->foto_out)) {
+                        $folder = date("Ym", strtotime($attandance->date_out));
+                        $foto_out = 'assets/document/attendance/' . $folder . '/' . $attandance->foto_out;
+                    } else {
+                        $foto_out = null;
+                    }
+
+                    $datas[] = array(
+                        "date_in" => @$attandance->date_in,
+                        "date_out" => @$attandance->date_out,
+                        "time_in" => @$attandance->time_in,
+                        "time_out" => @$attandance->time_out,
+                        "foto_in" => $foto_in,
+                        "foto_out" => $foto_out,
+                    );
                 }
 
-                //Working Calendar
-                $this->db->select('description');
-                $this->db->from('calendars');
-                $this->db->where('trans_date', $working_date);
-                $holiday = $this->db->get()->result_array();
+                die(json_encode(array(
+                    "title" => "Success",
+                    "message" => "Data Found",
+                    "theme" => "success",
+                    "results" => $datas
+                )));
+            } else {
+                show_error("Api Key Invalid");
+            }
+        } else {
+            show_error("Cannot Process your request");
+        }
+    }
 
-                //Permit
-                $this->db->select("a.*, c.name as reason_name, d.name as permit_name");
-                $this->db->from('permits a');
-                $this->db->join('employees b', 'a.employee_id = b.id');
-                $this->db->join('reasons c', 'a.reason_id = c.id');
-                $this->db->join('permit_types d', 'a.permit_type_id = d.id');
-                $this->db->where('b.number', $number);
-                $this->db->where('a.permit_date <=', $working_date);
-                $this->db->where('a.permit_date >=', $working_date);
-                $permit = $this->db->get()->row();
+    public function list($api_key = "")
+    {
+        $post = $this->input->post();
 
-                //Attandance and Overtime
-                $this->db->select("b.date_in, b.time_in, b.date_out, b.time_out, c.request_code, c.start, c.end, c.duration, c.remarks");
-                $this->db->from('employees a');
-                $this->db->join('attandances b', 'a.number = b.number');
-                $this->db->join('overtimes c', 'a.id = c.employee_id and b.date_in = c.trans_date', 'left');
-                $this->db->where('b.date_in =', $working_date);
-                $this->db->where('a.number', $number);
-                $this->db->order_by('a.name', 'asc');
-                $this->db->order_by('b.date_in', 'asc');
-                $attandance = $this->db->get()->row();
+        if ($api_key != "") {
+            $user = $this->mobile->read("users", [], ["api_key" => $api_key]);
 
-                //Shift and Setting Group
-                $this->db->select("d.start, d.end, d.days, d.working, d.tolerance, d.name as shift_name");
-                $this->db->from('employees a');
-                $this->db->join('shift_employees b', 'a.id = b.employee_id');
-                $this->db->join('shifts c', 'c.id = b.shift_id');
-                $this->db->join('shift_details d', 'd.shift_id = c.id');
-                $this->db->where('a.number', $number);
-                $this->db->where('d.working', $status_working);
-                $shift = $this->db->get()->row();
-
-                $time_in = @$shift->start;
-                $permit_remarks = @$permit->note;
-                $permit_name = @$permit->permit_name;
-
-                //Jika hari kerja nya adalah 5 hari
-                if (@$shift->days == "5") {
-                    //sabtu dan minggu libur
-                    if (date('w', $i) !== '0' && date('w', $i) !== '6') {
-                        $weekend = "";
-                    } else {
-                        $weekend = "Weekend";
-                    }
-                } else {
-                    //minggu doang libur
-                    if (date('w', $i) !== '0') {
-                        $weekend = "";
-                    } else {
-                        $weekend = "Weekend";
-                    }
-                }
-
-                if (@$time_in >= @$attandance->time_in) {
-                    $status_masuk = "ON TIME";
-                } elseif (@$time_in == null) {
-                    $status_masuk = "UN SETTING";
-                } elseif (@$time_in <= @$attandance->time_in) {
-                    $status_masuk = "LATE";
-                } else {
-                    $status_masuk = "ERROR";
-                }
-
-                //jika status tanggal merah nya kosong
-                if (@$holiday->description == null) {
-                    //cek apakah harinya minggu jika iya maka default Weekend
-                    if ($weekend == "Weekend") {
-                        $holiday = $weekend;
-                    } elseif ($permit_name != null) {
-                        $holiday = @$holiday->description;
-                    } else {
-                        $holiday = $permit_remarks;
-                    }
-                    //isi dengan tanggal merah
-                } else {
-                    $holiday = @$holiday->description;
-                }
-
-                if (@$attandance->time_in == null && $holiday != 'Weekend') {
-                    if ($permit_name != null) {
-                        $permits += 1;
-                        $working += 0;
-                        $absence += 0;
-                        $late += 0;
-                    } elseif ($holiday != null) {
-                        $permits += 0;
-                        $working += 0;
-                        $absence += 0;
-                        $late += 0;
-                    } else {
-                        $permits += 0;
-                        $working += 0;
-                        $absence += 1;
-                        $late += 0;
-                    }
-                } else {
-                    if ($holiday == "Weekend") {
-                        $permits += 0;
-                        $working += 0;
-                        $absence += 0;
-                        $late += 0;
-                    } elseif (@$permit_name != null) {
-                        $permits += 1;
-                        $working += 0;
-                        $absence += 0;
-                        $late += 0;
-                    } else {
-                        if (@$status_masuk == "LATE") {
-                            $permits += 0;
-                            $working += 1;
-                            $absence += 0;
-                            $late += 1;
-                        } else if (@$status_masuk == "ON TIME") {
-                            $permits += 0;
-                            $working += 1;
-                            $absence += 0;
-                            $late += 0;
-                        } else {
-                            $permits += 0;
-                            $working += 1;
-                            $absence += 0;
-                            $late += 0;
-                        }
-                    }
-                }
+            if (!$post) {
+                show_error("Request failed, date is empty");
             }
 
-            die(json_encode(array(
-                "code" => "200",
-                "results" => array(
-                    "employee_name" => $employee->name,
-                    "working" => $working,
-                    "permission" => $permits,
-                    "absence" => $absence,
-                    "late" => $late
-                ),
-                "status" => "success",
-            )));
+            $date = $post['date'];
+
+            if ($user) {
+                $attandances = $this->mobile->query("SELECT date_in, date_out, time_in, time_out, foto_in, foto_out FROM attandances WHERE number = '$user->number' AND date_in LIKE '$date%' ORDER BY date_in DESC");
+
+                $datas = array();
+                foreach ($attandances as $attandance) {
+                    $folder_in = date("Ym", strtotime($attandance->date_in));
+                    $folder_out = date("Ym", strtotime($attandance->date_out));
+
+                    if (!empty($attandance->foto_in)) {
+                        if (substr($attandance->foto_in, -4) == "jpeg") {
+                            $foto_in = 'assets/document/attendance/' . $folder_in . '/' . substr($attandance->foto_in, -15);
+                        } else {
+                            $foto_in = 'assets/document/attendance/' . $folder_in . '/' . substr($attandance->foto_in, -14);
+                        }
+                    } else {
+                        $foto_in = null;
+                    }
+
+                    if (!empty($attandance->foto_out)) {
+                        if (substr($attandance->foto_out, -4) == "jpeg") {
+                            $foto_out = 'assets/document/attendance/' . $folder_out . '/' . substr($attandance->foto_out, -15);
+                        } else {
+                            $foto_out = 'assets/document/attendance/' . $folder_out . '/' . substr($attandance->foto_out, -14);
+                        }
+                    } else {
+                        $foto_out = null;
+                    }
+
+                    $datas[] = array(
+                        "date_in" => @$attandance->date_in,
+                        "date_out" => @$attandance->date_out,
+                        "time_in" => @$attandance->time_in,
+                        "time_out" => @$attandance->time_out,
+                        "foto_in" => $foto_in,
+                        "foto_out" => $foto_out,
+                    );
+                }
+
+                die(json_encode(array(
+                    "title" => "Success",
+                    "message" => "Data Found",
+                    "theme" => "success",
+                    "results" => $datas
+                )));
+            } else {
+                show_error("Api Key Invalid");
+            }
+        } else {
+            show_error("Cannot Process your request");
+        }
+    }
+
+    public function locationTest()
+    {
+        if (!$this->input->post()) {
+            show_error("Cannot Process your request");
+        }
+
+        $post = $this->input->post();
+
+        $url = "https://app.hris-server.com/";
+
+        $payload = [
+            "link" => $post['link'],
+            "get" => 'location'
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($payload));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/x-www-form-urlencoded'
+        ]);
+
+        $response = curl_exec($ch);
+
+        if (curl_errno($ch)) {
+            echo json_encode([
+                "title" => "Error",
+                "message" => curl_error($ch),
+                "theme" => "error"
+            ]);
+            curl_close($ch);
+            exit;
+        }
+
+        curl_close($ch);
+
+        // Kalau API tujuan return JSON
+        $result = json_decode($response, true);
+
+        echo json_encode([
+            "title" => "Success",
+            "message" => "Request success",
+            "theme" => "success",
+            "results" => $result
+        ]);
+        exit;
+    }
+
+    // public function location()
+    // {
+    //     $this->apps = $this->load->database('apps', TRUE);
+
+    //     if ($this->input->post()) {
+    //         $post = $this->input->post();
+
+    //         $this->apps->where('link', $post['link']);
+    //         $group = $this->apps->get('companies')->row();
+
+    //         $this->apps->select("*");
+    //         $this->apps->from('companies');
+    //         $this->apps->where('link', 'http://bpi.astechno.net/hris-bpi/');
+    //         $companies = $this->apps->get()->result_array();
+
+    //         die(json_encode(array(
+    //             "title" => "Success",
+    //             "message" => "Data Found",
+    //             "theme" => "success",
+    //             "results" => $companies
+    //         )));
+    //     } else {
+    //         show_error("Cannot Process your request");
+    //     }
+    // }
+
+    public function locationUpdate()
+    {
+        $this->apps = $this->load->database('apps', TRUE);
+
+        if ($this->input->post()) {
+            $post = $this->input->post();
+
+            $this->apps->where('number', $post['number']);
+            $send = $this->apps->update("companies", ["latitude" => $post['latitude'], "longitude" => $post['longitude']]);
+
+            if ($send) {
+                echo json_encode(array("title" => "Good Job", "message" => "Data Updated Successfully", "theme" => "success"));
+            } else {
+                echo log_message('error', 'There is an error in your system or data');
+            }
+        } else {
+            show_error("Cannot Process your request");
+        }
+    }
+
+    public function createData($api_key = "")
+    {
+        if ($api_key != "") {
+            $user = $this->mobile->read("users", [], ["api_key" => $api_key]);
+            $folder = date("Ym");
+            $path = 'assets/document/attendance/' . $folder;
+
+            if (!file_exists($path)) {
+                mkdir($path, 0777, true);
+            }
+
+            if ($user) {
+                if ($this->input->post()) {
+                    $post = $this->input->post();
+
+                    $employee = $this->mobile->read("employees", [], ["number" => $user->number]);
+
+                    if ($post['date_in'] != "" && $post['time_in'] != "") {
+                        if ($post['date_out'] != "" && $post['time_out'] != "") {
+                            $date_in = $post['date_in'];
+                            $foto = $this->mobile->upload('foto', ['png', 'jpg', 'jpeg'], 'assets/document/attendance/' . $folder . '/', ["number" => $user->number, "date_in" => $date_in], "attandances", "foto_out");
+
+                            $this->db->select('*');
+                            $this->db->from('attandances');
+                            $this->db->where('number', $user->number);
+                            $this->db->where("date_in = '$date_in'");
+                            $attandance_in = $this->db->get()->row();
+
+                            $data = array(
+                                'number' => $user->number,
+                                'date_out' => $post['date_out'],
+                                'time_out' => $post['time_out'],
+                                'foto_out' => @$foto
+                            );
+
+                            if ($this->mobile->update('attandances', ["id" => @$attandance_in->id], $data, $user->username)) {
+                                die(json_encode(array(
+                                    "title" => "Success",
+                                    "message" => "Attendance Out Completed",
+                                    "theme" => "success"
+                                )));
+                            } else {
+                                show_error("Attendance Out UnComplete");
+                            }
+                        } else {
+                            // $foto = $this->mobile->upload('foto', ['png', 'jpg', 'jpeg'], 'assets/document/attendance/', ["number" => $user->number], "attandances", "foto");
+                            $foto = $this->mobile->upload('foto', ['png', 'jpg', 'jpeg'], 'assets/document/attendance/' . $folder . '/');
+
+                            $tolerance_hour_min = date("H:i:s", strtotime('-2 Hour', strtotime($post['time_in'])));
+                            $tolerance_hour_plus = date("H:i:s", strtotime('+2 Hour', strtotime($post['time_in'])));
+                            $this->db->select("d.start, d.end, d.days, d.working, d.tolerance, c.name, d.name as shift_name");
+                            $this->db->from('shift_employees b');
+                            $this->db->join('shifts c', 'c.id = b.shift_id');
+                            $this->db->join('shift_details d', 'd.shift_id = c.id');
+                            $this->db->where('b.employee_id', $employee->id);
+                            $this->db->where("TIME(d.start) >=  TIME('$tolerance_hour_min') && TIME(d.start) <= TIME('$tolerance_hour_plus')");
+                            $shift = $this->db->get()->row();
+
+                            $data = array(
+                                'number' => $user->number,
+                                'date_in' => $post['date_in'],
+                                'time_in' => $post['time_in'],
+                                'foto_in' => @$foto,
+                                "shift_start" => @$shift->start,
+                                "shift_end" => @$shift->end,
+                                "shift_name" => @$shift->shift_name,
+                                "shift_detail" => @$shift->name,
+                                "shift_days" => @$shift->days,
+                            );
+
+                            if ($this->mobile->create('attandances', $data, $user->username)) {
+                                die(json_encode(array(
+                                    "title" => "Success",
+                                    "message" => "Attendance In Completed",
+                                    "theme" => "success",
+                                    "results" => $shift
+                                )));
+                            } else {
+                                show_error("Attendance In UnComplete");
+                            }
+                        }
+                    } else {
+                        show_error("Cannot Process your request");
+                    }
+                } else {
+                    show_error("Cannot Process your request");
+                }
+            } else {
+                show_error("Api Key Invalid");
+            }
         } else {
             show_error("Cannot Process your request");
         }
