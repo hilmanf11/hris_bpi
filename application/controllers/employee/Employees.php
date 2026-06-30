@@ -397,6 +397,7 @@ class Employees extends CI_Controller
                             "contract_id" => $post['contract_id'],
                             "group_id" => $post['group_id'],
                             "date_sign" => $post['date_sign'],
+                            "date_sign_contract" => $post['date_sign_contract'],
                             "date_expired" => $post['date_expired']
                         );
 

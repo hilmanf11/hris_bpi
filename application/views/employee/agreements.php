@@ -441,6 +441,7 @@
                 $("#group_id").combobox('setValue', row.group_id);
                 $("#position_id").combogrid('setValue', row.position_id);
                 $("#date_sign").datebox('setValue', row.date_sign);
+                $("#date_sign_contract").datebox('setValue', row.date_sign_contract);
                 $("#date_expired").datebox('setValue', row.date_expired);
             }
         });
