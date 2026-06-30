@@ -57,4 +57,26 @@ class Employees extends CI_Controller
             show_error("Cannot Process your request");
         }
     }
+
+    public function reads_employee()
+    {
+
+        $this->db->select('a.*, c.name as division_name, d.name as departement_name, e.name as departement_sub_name, f.name as position_name');
+        $this->db->from('employees a');
+        $this->db->join('divisions c', 'a.division_id = c.id');
+        $this->db->join('departements d', 'a.departement_id = d.id');
+        $this->db->join('departement_subs e', 'a.departement_sub_id = e.id');
+        $this->db->join('positions f', 'a.position_id = f.id');
+        $this->db->where('a.status', 0);
+        $this->db->order_by('a.name', 'asc');
+        $employees = $this->db->get()->result_array();
+
+        die(json_encode(array(
+            "title" => "Success",
+            "message" => "Data Found",
+            "theme" => "success",
+            "results" => array($employees)
+        )));
+
+    }
 }
