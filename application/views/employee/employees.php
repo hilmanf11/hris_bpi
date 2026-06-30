@@ -14,7 +14,9 @@
             <th rowspan="2" data-options="field:'type',width:100,halign:'center'">Job Type</th>
             <th rowspan="2" data-options="field:'contract_name',width:100,halign:'center'">Employee Type</th>
             <th rowspan="2" data-options="field:'date_sign',width:100,halign:'center',formatter:FormatterDate">Join Date</th>
+            <th rowspan="2" data-options="field:'date_sign_contract',width:100,halign:'center',formatter:FormatterDate">Sign Date</th>
             <th rowspan="2" data-options="field:'date_expired',width:120,halign:'center',formatter:FormatterDate">Contract Expired</th>
+            <th rowspan="2" data-options="field:'resign_date',width:120,halign:'center',formatter:FormatterDate">Resign Date</th>
             <th rowspan="2" data-options="field:'service',width:180,halign:'center'">Fit Of Service</th>
             <th rowspan="2" data-options="field:'bank_name',width:200,halign:'center'">Bank Name</th>
             <th rowspan="2" data-options="field:'bank_no',width:100,halign:'center'">Bank Account</th>

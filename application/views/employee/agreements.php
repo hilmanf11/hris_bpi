@@ -11,6 +11,7 @@
             <th rowspan="2" data-options="field:'position_name',width:150,halign:'center'">Position</th>
             <th rowspan="2" data-options="field:'contract_name',width:150,halign:'center'">Employee Type</th>
             <th rowspan="2" data-options="field:'date_sign',width:100,halign:'center',formatter:FormatterDate">Join Date</th>
+            <th rowspan="2" data-options="field:'date_sign_contract',width:100,halign:'center',formatter:FormatterDate">Sign Date</th>
             <th rowspan="2" data-options="field:'date_expired',width:120,halign:'center',formatter:FormatterDate">Contract Expired</th>
             <th rowspan="2" data-options="field:'note',width:300,halign:'center'">Note</th>
             <th rowspan="2" data-options="field:'attachment',width:100,align:'center', formatter:fileFormatter">Attachment</th>
@@ -104,8 +105,12 @@
                 <input style="width:60%;" name="contract_id" id="contract_id" required="" class="easyui-combobox">
             </div>
             <div class="fitem">
-                <span style="width:35%; display:inline-block;">Date Sign</span>
+                <span style="width:35%; display:inline-block;">Date Join</span>
                 <input style="width:60%;" name="date_sign" id="date_sign" data-options="formatter:myformatter,parser:myparser" class="easyui-datebox">
+            </div>
+            <div class="fitem">
+                <span style="width:35%; display:inline-block;">Date Sign</span>
+                <input style="width:60%;" name="date_sign_contract" id="date_sign_contract" data-options="formatter:myformatter,parser:myparser" class="easyui-datebox">
             </div>
             <div class="fitem">
                 <span style="width:35%; display:inline-block;">Date Expired</span>

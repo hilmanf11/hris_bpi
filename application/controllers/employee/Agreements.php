@@ -135,6 +135,7 @@ class Agreements extends CI_Controller
                         "group_id" => $post['group_id'],
                         "contract_id" => $post['contract_id'],
                         "date_sign" => $post['date_sign'],
+                        "date_sign_contract" => $post['date_sign_contract'],
                         "date_expired" => $post['date_expired'],
                     );
                     $this->crud->update('employees', ["number" => $post['number']], $postEmployee);
@@ -170,6 +171,7 @@ class Agreements extends CI_Controller
                     "group_id" => $post['group_id'],
                     "contract_id" => $post['contract_id'],
                     "date_sign" => $post['date_sign'],
+                    "date_sign_contract" => $post['date_sign_contract'],
                     "date_expired" => $post['date_expired'],
                 );
                 $this->crud->update('employees', ["number" => $post['number']], $postEmployee);
@@ -288,6 +290,7 @@ class Agreements extends CI_Controller
                 <th>Departement Sub</th>
                 <th>Position</th>
                 <th>Join Date</th>
+                <th>Sign Date</th>
                 <th>Exp Date</th>
                 <th>Note</th>
             </tr>';
@@ -302,6 +305,7 @@ class Agreements extends CI_Controller
                     <td>' . $data['departement_sub_name'] . '</td>
                     <td>' . $data['position_name'] . '</td>
                     <td>' . $data['date_sign'] . '</td>
+                    <td>' . $data['date_sign_contract'] . '</td>
                     <td>' . $data['date_expired'] . '</td>
                     <td>' . $data['note'] . '</td>';
             $no++;

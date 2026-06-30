@@ -311,7 +311,9 @@ class Employees extends CI_Controller
                 e.name as departement_sub_name,
                 e.type, 
                 g.name as position_name,
-                h.name as contract_name');
+                h.name as contract_name,
+                i.resign_date as resign_date'
+            );
         $this->db->from('employees a');
         $this->db->join('notifications b', "a.id = b.table_id and b.table_name = 'employees'", 'left');
         $this->db->join('divisions c', 'c.id = a.division_id');
@@ -320,6 +322,7 @@ class Employees extends CI_Controller
         $this->db->join('agreements f', 'a.number = f.number and f.status = 0');
         $this->db->join('positions g', 'g.id = a.position_id', 'left');
         $this->db->join('contracts h', 'h.id = a.contract_id', 'left');
+        $this->db->join('resignations i', 'i.employee_id = a.id', 'left');
         $this->db->where('a.deleted', 0);
         if($filter_status == ""){
             $this->db->where('a.status', 0);
@@ -979,7 +982,8 @@ class Employees extends CI_Controller
                 k.name as marital_name,
                 l.number as source_number,
                 l.name as source_name,
-                m.name as shift_name');
+                m.name as shift_name,
+                n.resign_date as resign_date');
         $this->db->from('employees a');
         $this->db->join('notifications b', 'a.id = b.table_id', 'left');
         $this->db->join('divisions c', 'c.id = a.division_id');
@@ -993,6 +997,7 @@ class Employees extends CI_Controller
         $this->db->join('maritals k', 'k.id = a.marital_id', 'left');
         $this->db->join('sources l', 'l.id = a.source_id', 'left');
         $this->db->join("(SELECT a.employee_id, b.name FROM shift_employees a JOIN shifts b ON a.shift_id = b.id) m", 'm.employee_id = a.id', 'left');
+        $this->db->join('resignations n', 'n.employee_id = a.id', 'left');
         $this->db->where('a.deleted', 0);
         $this->db->like('a.status', $filter_status);
         $this->db->like('a.departement_id', $aprvDepartement);
@@ -1051,7 +1056,9 @@ class Employees extends CI_Controller
                 <th>Source</th>
                 <th>Shift Type</th>
                 <th>Join Date</th>
+                <th>Sign Date</th>
                 <th>Contract Expired</th>
+                <th>Resign Date</th>
                 <th>Fit Of Service</th>
                 <th>Address</th>
                 <th>Place Birth</th>
@@ -1106,7 +1113,9 @@ class Employees extends CI_Controller
                     <td>' . $data['source_name'] . '</td>
                     <td>' . $data['shift_name'] . '</td>
                     <td>' . $data['date_sign'] . '</td>
+                    <td>' . $data['date_sign_contract'] . '</td>
                     <td>' . $data['date_expired'] . '</td>
+                    <td>' . $data['resign_date'] . '</td>
                     <td>' . $this->readService($data['date_sign']) . '</td>
                     <td>' . $data['address'] . '</td>
                     <td>' . $data['place_birth'] . '</td>
