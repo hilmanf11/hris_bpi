@@ -44,6 +44,7 @@ class Attandances extends CI_Controller
     //GET DATATABLES
     public function datatables()
     {
+        
         if ($this->input->post()) {
             $filter_from = $this->input->get('filter_from');
             $filter_to = $this->input->get('filter_to');
@@ -55,7 +56,7 @@ class Attandances extends CI_Controller
             $result = array();
 
             //Employee
-            $this->db->select("a.id, b.id as attandance_id, a.number, a.name, a.division_id, a.departement_id, a.departement_sub_id,
+            $this->db->select("a.id, b.id as attandance_id, a.number, a.name, a.division_id, a.departement_id, a.departement_sub_id,coalesce(b.attandance_type,'Upload System') as attandance_type,
                 DAYNAME(b.date_in) as dayname,
                 b.date_in,
                 b.date_out,
@@ -84,8 +85,10 @@ class Attandances extends CI_Controller
             $this->db->order_by("a.name", "asc");
             $this->db->order_by("b.date_in", "asc");
             $employees = $this->db->get()->result_array();
+            // echo 'test';
+        // die();
 
-            die(json_encode($employees));
+            // die(json_encode($employees));
 
             $datas['total'] = count($employees);
             $datas['rows'] = $employees;
@@ -99,7 +102,7 @@ class Attandances extends CI_Controller
         if ($this->input->post()) {
             if ($this->form_validation->run() == TRUE) {
                 $post   = $this->input->post();
-                $attandance = $this->crud->read("attandances", [], ["number" => $post['number'], "date_in" => $post['date_in']]);
+                $attandance = $this->crud->read("attandances", [], ["number" => $post['number'], "date_in" => $post['date_in'], "attandance_type" => "Input System"]);
                 if ($attandance) {
                     echo json_encode(array("title" => "Available", "message" => "The attandance for this employee and date in has been created", "theme" => "error"));
                 } else {
@@ -317,10 +320,24 @@ class Attandances extends CI_Controller
                     $hour = floor($diff / (60 * 60));
 
                     //die($date_in . " " . $tolerance_hour_plus . " - " . $date_in . " " . @$shift->end . " | " . $hour);
-                    if ($hour < 0) {
-                        $date_out = $date_in;
+                    if (empty($time_end)) {
+                        $hour_in = date("H:i:s", strtotime($time_in));
+
+                        // Jika jam masuk lebih dari jam 15:00:00 (Masuk Shift Sore/Malam)
+                        if ($hour_in > "15:00:00") {
+                            $date_out = $tomorrow;
+                        } else {
+                            $date_out = $date_in;
+                        }
                     } else {
-                        $date_out = $tomorrow;
+                        $diff = $time_begin - $time_end;
+                        $hour = floor($diff / (60 * 60));
+
+                        if ($hour < 0) {
+                            $date_out = $date_in;
+                        } else {
+                            $date_out = $tomorrow;
+                        }
                     }
 
                     if (!empty($attandance_in->number)) {
@@ -332,6 +349,7 @@ class Attandances extends CI_Controller
                             'shift_name' => @$shift->name,
                             'shift_detail' => @$shift->shift_name,
                             'shift_days' => @$shift->days,
+                            'attandance_type' => 'Upload System'
                         );
 
                         $this->crud->update('attandances', ["id" => $attandance_in->id], $data_attandance, "no_log");
@@ -346,6 +364,7 @@ class Attandances extends CI_Controller
                             'shift_name' => @$shift->name,
                             'shift_detail' => @$shift->shift_name,
                             'shift_days' => @$shift->days,
+                            'attandance_type' => 'Upload System'
                             // 'time_out' => @$shift->end,
                         );
                         $this->crud->create('attandances', $data_attandance, "no_log");
@@ -395,6 +414,7 @@ class Attandances extends CI_Controller
                             'shift_name' => @$shift->name,
                             'shift_detail' => @$shift->shift_name,
                             'shift_days' => @$shift->days,
+                            'attandance_type' => 'Upload System'
                         );
                         $this->crud->update('attandances', ["id" => $attandance_out->id], $data_attandance, "no_log");
                         echo json_encode(array("title" => "Updated", "message" => $employee->name . " | " . $date_in . " " . $time_in . " Update data Check Out", "theme" => "success"));
@@ -409,6 +429,7 @@ class Attandances extends CI_Controller
                             'shift_name' => @$shift->name,
                             'shift_detail' => @$shift->shift_name,
                             'shift_days' => @$shift->days,
+                            'attandance_type' => 'Upload System'
                         );
                         $this->crud->create('attandances', $data_attandance, "no_log");
                         echo json_encode(array("title" => "Created", "message" => $employee->name . " | " . $date_in . " " . $time_in . " Create data Check Out", "theme" => "success"));
