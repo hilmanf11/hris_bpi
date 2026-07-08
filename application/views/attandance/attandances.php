@@ -12,6 +12,7 @@
             <th data-options="field:'contract_name',width:100">Type</th>
             <th data-options="field:'time_in',width:80">Check In</th>
             <th data-options="field:'time_out',width:80">Check Out</th>
+            <th data-options="field:'attandance_type',width:80">Type</th>
         </tr>
     </thead>
 </table>
