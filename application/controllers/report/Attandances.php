@@ -70,7 +70,7 @@ class Attandances extends CI_Controller
         }
     }
 
-    public function print($option = "")
+    public function print_old($option = "")
     {
         ob_start();
         if ($option == "excel") {
@@ -479,6 +479,495 @@ class Attandances extends CI_Controller
                                     <td>' . @$cash_carry->total_duration . '</td>
                                     <td ' . $style_status . '>' . $attandance_status . '</td>
                                     <td>' . $holiday . '</td>
+                                </tr>';
+                    }
+
+                    $no++;
+                }
+                
+                $html .= '</table>
+                <br><br>
+                <div style="width:100%; float:left; margin-bottom:20px;">
+                    <div style="width:20%; float:left;">
+                        <table style="width:100%; font-size:12px;">
+                            <tr>
+                                <td width="100" style="color:black; font-weight:bold;">WORKING DAY</td>
+                                <td width="5">:</td>
+                                <td>'.$sts_workingday.'</td>
+                            </tr>
+                            <tr>
+                                <td width="100" style="color:green; font-weight:bold;">ON TIME</td>
+                                <td width="5">:</td>
+                                <td>'.$sts_ontime.'</td>
+                            </tr>
+                            <tr>
+                                <td width="100" style="color:blue; font-weight:bold;">UN CHECK IN</td>
+                                <td width="5">:</td>
+                                <td>'.$sts_uncheckin.'</td>
+                            </tr>
+                            <tr>
+                                <td width="100" style="color:orange; font-weight:bold;">UN SETTING</td>
+                                <td width="5">:</td>
+                                <td>'.$sts_unsetting.'</td>
+                            </tr>
+                            <tr>
+                                <td width="100" style="color:red; font-weight:bold;">LATE</td>
+                                <td width="5">:</td>
+                                <td>'.$sts_late.'</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div style="width:20%; float:left;">
+                        <table style="width:100%; font-size:12px;">
+                            <tr>
+                                <td width="150" style="color:red; font-weight:bold;">ABSENCE</td>
+                                <td width="5">:</td>
+                                <td>'.$sts_absence.'</td>
+                            </tr>
+                            <tr>
+                                <td width="100" style="color:red; font-weight:bold;">WEEKEND</td>
+                                <td width="5">:</td>
+                                <td>'.$sts_weekend.'</td>
+                            </tr>
+                            <tr>
+                                <td width="100" style="color:blue; font-weight:bold;">CHANGE DAY</td>
+                                <td width="5">:</td>
+                                <td>'.$sts_changeday.'</td>
+                            </tr>
+                            <tr>
+                                <td width="100" style="color:orange; font-weight:bold;">PERMIT</td>
+                                <td width="5">:</td>
+                                <td>'.$sts_permit.'</td>
+                            </tr>
+                            <tr>
+                                <td width="100" style="color:blue; font-weight:bold;">OVERTIME <i>(hour)</i></td>
+                                <td width="5">:</td>
+                                <td>'.$sts_overtime.'</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                </div>';
+
+                echo $html;
+
+                ob_flush();
+                flush();
+            }
+        }
+
+        ob_end_flush();
+    }
+
+    public function print($option = "")
+    {
+        ob_start();
+        if ($option == "excel") {
+            $format  = date("Ymd");
+            header("Content-type: application/vnd-ms-excel");
+            header("Content-Disposition: attachment; filename=report_attandance_$format.xls");
+        }
+
+        if ($this->input->get()) {
+            $filter_from = $this->input->get('filter_from');
+            $filter_to = $this->input->get('filter_to');
+            $filter_division = $this->input->get('filter_division');
+            $filter_departement = $this->input->get('filter_departement');
+            $filter_departement_sub = $this->input->get('filter_departement_sub');
+            $filter_employee = $this->input->get('filter_employee');
+            $filter_permit_type = $this->input->get('filter_permit_type');
+            $filter_status = $this->input->get('filter_status');
+            $filter_group = $this->input->get('filter_group');
+            $filter_status_employee = $this->input->get('filter_status_employee');
+            $username = $this->session->username;
+
+            echo '<html>
+                <meta charset="UTF-8">
+                <meta http-equiv="cache-control" content="no-cache">
+                <meta http-equiv="expires" content="0">
+                <meta http-equiv="pragma" content="no-cache">
+            <head><title>Print Data</title></head><style>body {font-family: Arial, Helvetica, sans-serif;}#customers {border-collapse: collapse;width: 100%;font-size: 10px;}#customers td, #customers th {border: 1px solid #ddd;padding: 2px;}#customers tr:nth-child(even){background-color: #f2f2f2;}#customers tr:hover {background-color: #ddd;}#customers th {padding-top: 2px;padding-bottom: 2px;text-align: left;color: black;}, .kotak {width: 20px;height: 20px;}</style><body>';
+            
+            $this->db->select("a.id, a.number, a.name, c.name as division_name, d.name as departement_name, e.name as departement_sub_name, f.warning_letter");
+            $this->db->from('employees a');
+            $this->db->join('divisions c', 'a.division_id = c.id');
+            $this->db->join('departements d', 'a.departement_id = d.id');
+            $this->db->join('departement_subs e', 'a.departement_sub_id = e.id');
+            $this->db->join('privilege_groups i', "a.group_id = i.group_id and i.username = '$username'");
+            $this->db->join('(SELECT employee_id, MAX(warning_letter) as warning_letter FROM warning_letters GROUP BY employee_id) f', 'a.id = f.employee_id', 'left');
+            $this->db->where('a.deleted', 0);
+            $this->db->where('a.status', $filter_status_employee);
+            $this->db->like('a.division_id', $filter_division);
+            $this->db->like('a.departement_id', $filter_departement);
+            $this->db->like('a.departement_sub_id', $filter_departement_sub);
+            $this->db->like('a.group_id', $filter_group);
+            $this->db->like('a.id', $filter_employee);
+            $this->db->group_by('a.id');
+            $this->db->order_by('d.name', 'asc');
+            $this->db->order_by('e.name', 'asc');
+            $this->db->order_by('a.name', 'asc');
+            $records = $this->db->get()->result_array();
+
+            if (empty($records)) {
+                echo "<h3>No Data Found</h3></body></html>";
+                return;
+            }
+
+            // === OPTIMASI (EAGER LOADING) ===
+            $emp_ids = array_column($records, 'id');
+            $emp_numbers = array_column($records, 'number');
+
+            $start_date = date('Y-m-d', strtotime($filter_from));
+            $finish_date = date('Y-m-d', strtotime($filter_to));
+            $prev_day = date('Y-m-d', strtotime($start_date . ' -1 day'));
+            $next_day = date('Y-m-d', strtotime($finish_date . ' +1 day'));
+
+            $config = $this->db->get('config')->row();
+
+            $calendars = $this->db->where('trans_date >=', $start_date)->where('trans_date <=', $finish_date)->get('calendars')->result();
+            $cal_data = []; foreach($calendars as $c) { $cal_data[$c->trans_date] = clone $c; }
+
+            $this->db->select("a.*, c.name as reason_name, d.name as permit_name");
+            $this->db->from('permits a')->join('reasons c', 'a.reason_id = c.id')->join('permit_types d', 'a.permit_type_id = d.id');
+            $this->db->where_in('a.employee_id', $emp_ids);
+            $this->db->where('a.permit_date >=', $start_date)->where('a.permit_date <=', $finish_date);
+            $permits = $this->db->get()->result();
+            $permit_data = []; foreach($permits as $p) { $permit_data[$p->employee_id][$p->permit_date] = clone $p; }
+
+            $this->db->select("b.number, b.date_in, b.time_in, b.date_out, b.time_out, c.request_code, c.start as ot_start, c.end as ot_end, c.duration, c.remarks");
+            $this->db->from('attandances b');
+            $this->db->join('employees a', 'a.number = b.number');
+            $this->db->join('overtimes c', 'a.id = c.employee_id and b.date_in = c.trans_date', 'left');
+            $this->db->where_in('b.number', $emp_numbers);
+            $this->db->where('b.date_in >=', $prev_day)->where('b.date_in <=', $next_day);
+            $this->db->order_by('b.date_in', 'asc');
+            $atts = $this->db->get()->result();
+            $att_data = []; foreach($atts as $at) { $att_data[$at->number][$at->date_in] = clone $at; }
+
+            $this->db->select("*")->from('change_days')->where_in('employee_id', $emp_ids);
+            $change_days = $this->db->get()->result();
+            $cd_start = []; $cd_end = [];
+            foreach($change_days as $cd) {
+                $cd_start[$cd->employee_id][$cd->start] = clone $cd;
+                $cd_end[$cd->employee_id][$cd->end] = clone $cd;
+            }
+
+            $this->db->select("employee_id, trans_date, start, request_code, SUM(duration_hour) as total_duration");
+            $this->db->from('cash_carries')->where_in('employee_id', $emp_ids);
+            $this->db->where('trans_date >=', $start_date)->where('trans_date <=', $finish_date);
+            $this->db->group_by(array('employee_id', 'trans_date', 'start', 'request_code'));
+            $ccs = $this->db->get()->result();
+            $cc_data = []; foreach($ccs as $cc) { $cc_data[$cc->employee_id][$cc->trans_date] = clone $cc; }
+
+
+            $start = strtotime($filter_from);
+            $finish = strtotime($filter_to);
+            $no = 1;
+
+            foreach ($records as $record) {
+                if (!empty($record['warning_letter'])) {
+                    if ($record['warning_letter'] != "4") {
+                        $warning_letter = "SP " . $record['warning_letter'];
+                    } else {
+                        $warning_letter = "TERMINATION";
+                    }
+                } else {
+                    $warning_letter = "-";
+                }
+
+                $html = '<div style="page-break-after:always;"><center>
+                    <div style="float: left; font-size: 12px; text-align: left;">
+                        <table style="width: 100%;">
+                            <tr>
+                                <td width="50" style="font-size: 12px; vertical-align: top; text-align: center; vertical-align:jus margin-right:10px;">
+                                    <img src="' . $config->favicon . '" width="30">
+                                </td>
+                                <td style="font-size: 14px; text-align: left; margin:2px;">
+                                    <b>' . $config->name . '</b><br>
+                                    <small>' . $config->description . '</small>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div style="float: right; font-size: 12px; text-align: right;">
+                        Print Date ' . date("d M Y H:i:s") . ' <br>
+                        Print By ' . $this->session->username . '  
+                    </div>
+                </center><br><br><br>
+                <center>
+                    <h3 style="margin:0;">Report Attandance & Overtime</h3>
+                    <p style="margin:0;">Period ' . $filter_from . ' to ' . $filter_to . '</p>
+                    <br><br>
+                </center>
+
+                <table style="font-size: 11px;">    
+                    <tr>
+                        <td>Employee ID</td>
+                        <td>:</td>
+                        <td><b>' . $record['number'] . '</b></td>
+                    </tr>
+                    <tr>
+                        <td>Employee Name</td>
+                        <td>:</td>
+                        <td><b>' . $record['name'] . '</b></td>
+                    </tr>
+                    <tr>
+                        <td width="100">Division</td>
+                        <td width="10">:</td>
+                        <td><b>' . $record['division_name'] . '</b></td>
+                    </tr>
+                    <tr>
+                        <td>Departement</td>
+                        <td>:</td>
+                        <td><b>' . $record['departement_name'] . '</b></td>
+                    </tr>
+                    <tr>
+                        <td>Sub Departement</td>
+                        <td>:</td>
+                        <td><b>' . $record['departement_sub_name'] . '</b></td>
+                    </tr>
+                    <tr>
+                        <td>Warning Letter</td>
+                        <td>:</td>
+                        <td><b>' . $warning_letter . '</b></td>
+                    </tr>
+                </table>
+                <br>
+                <table id="customers" border="1">
+                    <tr>
+                        <th width="20" rowspan="2">No</th>
+                        <th rowspan="2" style="text-align:center;">Date</th>
+                        <th colspan="5" style="text-align:center;">Attandance</th>
+                        <th rowspan="2" style="text-align:center;">Overtime<br>Duration</th>
+                        <th rowspan="2" style="text-align:center;">Status</th>
+                        <th rowspan="2" style="text-align:center;">Remarks</th>
+                    </tr>
+                    <tr>
+                        <th style="text-align:center;">Shift</th>
+                        <th style="text-align:center;">Start</th>
+                        <th style="text-align:center;">End</th>
+                        <th style="text-align:center;">IN</th>
+                        <th style="text-align:center;">OUT</th>
+                    </tr>';
+                
+                $sts_workingday = 0; $sts_ontime = 0; $sts_uncheckin = 0; $sts_unsetting = 0;
+                $sts_late = 0; $sts_absence = 0; $sts_weekend = 0; $sts_changeday = 0;
+                $sts_permit = 0; $sts_overtime = 0;
+
+                for ($i = $start; $i <= $finish; $i += (60 * 60 * 24)) {
+                    $working_date = date('Y-m-d', $i);
+                    $weekend_txt = (date('w', $i) !== '0' && date('w', $i) !== '6') ? "WEEKDAY" : "WEEKEND";
+
+                    $holiday = isset($cal_data[$working_date]) ? clone $cal_data[$working_date] : new stdClass();
+                    $permit = isset($permit_data[$record['id']][$working_date]) ? clone $permit_data[$record['id']][$working_date] : clone new stdClass();
+                    $change_day = isset($cd_start[$record['id']][$working_date]) ? clone $cd_start[$record['id']][$working_date] : clone new stdClass();
+                    $change_day_end = isset($cd_end[$record['id']][$working_date]) ? clone $cd_end[$record['id']][$working_date] : clone new stdClass();
+                    $cash_carry = isset($cc_data[$record['id']][$working_date]) ? clone $cc_data[$record['id']][$working_date] : clone new stdClass();
+                    
+                    if (isset($att_data[$record['number']][$working_date])) {
+                        $attandance = clone $att_data[$record['number']][$working_date];
+                    } else {
+                        $attandance = clone new stdClass();
+                        $attandance->time_in = null; $attandance->time_out = null; $attandance->date_out = null;
+                        $attandance->request_code = null; $attandance->remarks = null;
+                    }
+
+                    // Pengecekan Lintas Hari
+                    if (!empty($attandance->time_in) && $attandance->time_in != '00:00:00' && (empty($attandance->time_out) || $attandance->time_out == '00:00:00')) {
+                        $in_time = strtotime($working_date . ' ' . $attandance->time_in);
+                        $tomorrow = date('Y-m-d', strtotime($working_date . ' +1 day'));
+                        
+                        $lookups = [];
+                        if(isset($att_data[$record['number']][$working_date])) $lookups[] = $att_data[$record['number']][$working_date];
+                        if(isset($att_data[$record['number']][$tomorrow])) $lookups[] = $att_data[$record['number']][$tomorrow];
+
+                        foreach ($lookups as $f_out) {
+                            if (!empty($f_out->time_out) && $f_out->time_out != '00:00:00') {
+                                $out_date = (!empty($f_out->date_out) && $f_out->date_out != '0000-00-00') ? $f_out->date_out : $f_out->date_in;
+                                $out_time = strtotime($out_date . ' ' . $f_out->time_out);
+                                $diff_hours = ($out_time - $in_time) / 3600;
+                                
+                                if ($diff_hours > 0 && $diff_hours <= 18) {
+                                    $attandance->time_out = $f_out->time_out;
+                                    $attandance->date_out = $out_date;
+                                    break; 
+                                }
+                            }
+                        }
+                    }
+
+                    if ((empty($attandance->time_in) || $attandance->time_in == '00:00:00') && !empty($attandance->time_out) && $attandance->time_out != '00:00:00') {
+                        $out_date = (!empty($attandance->date_out) && $attandance->date_out != '0000-00-00') ? $attandance->date_out : $working_date;
+                        $prev_date = date('Y-m-d', strtotime($working_date . ' -1 day'));
+                        
+                        if (isset($att_data[$record['number']][$prev_date])) {
+                            $past_in = clone $att_data[$record['number']][$prev_date];
+                            if (!empty($past_in->time_in) && $past_in->time_in != '00:00:00') {
+                                $in_time = strtotime($past_in->date_in . ' ' . $past_in->time_in);
+                                $out_time = strtotime($out_date . ' ' . $attandance->time_out);
+                                $diff_hours = ($out_time - $in_time) / 3600;
+                                
+                                if ($diff_hours > 0 && $diff_hours <= 18) {
+                                    $attandance->time_out = null;
+                                    $attandance->time_in = null;
+                                }
+                            }
+                        }
+                    }
+
+                    // === Shift and Setting Group (SESUAI REQUEST DATABASE LANGSUNG) ===
+                    $tolerance_hour_min = date("H:i:s", strtotime('-2 Hour', strtotime('-2 Hour', strtotime(@$attandance->time_in))));
+                    $tolerance_hour_plus = date("H:i:s", strtotime('+2 Hour', strtotime(@$attandance->time_in)));
+                    $this->db->select("d.start, d.end, d.days, d.working, d.tolerance, c.name, d.name as shift_name");
+                    $this->db->from('shift_employees b');
+                    $this->db->join('shifts c', 'c.id = b.shift_id');
+                    $this->db->join('shift_details d', 'd.shift_id = c.id');
+                    $this->db->where('b.employee_id', $record['id']);
+                    if (@$attandance->time_in > "23:00:00") {
+                        $this->db->where("d.start >= '$tolerance_hour_min'");
+                    } elseif (@$attandance->time_in != "") {
+                        $this->db->where("d.start >= '$tolerance_hour_min' and d.start <= '$tolerance_hour_plus'");
+                    }
+                    $shift = $this->db->get()->row();
+                    // ==================================================================
+
+                    // Weekend Check
+                    if (@$shift->days == "5") {
+                        $weekend = (date('w', $i) !== '0' && date('w', $i) !== '6') ? "" : "Weekend";
+                    } else {
+                        $weekend = (date('w', $i) !== '0') ? "" : "Weekend";
+                    }
+
+                    if (empty(@$shift->start)) {
+                        $status_masuk = "UN SETTING";
+                    } elseif (@$attandance->time_in <= @$shift->start) {
+                        $status_masuk = "ON TIME";
+                    } elseif (@$attandance->time_in > @$shift->start) {
+                        $status_masuk = "LATE";
+                    } else {
+                        $status_masuk = "ERROR";
+                    }
+
+                    $holiday_txt = ""; $style = "";
+                    if (empty($holiday->description)) {
+                        if ($weekend == "Weekend") {
+                            if(!empty($cash_carry->start)){
+                                $holiday_txt = "Overtime " . @$cash_carry->request_code;
+                                $sts_overtime += @$cash_carry->total_duration;
+                            }else if(!empty($change_day_end->end)){
+                                $holiday_txt = "Overtime from " . @$change_day_end->start;
+                            }else{
+                                $holiday_txt = $weekend;
+                            }
+                            $style = "style='background: #FFBEB0;'";
+                            $sts_weekend += 1;
+                        } elseif (!empty($cash_carry->start)) {
+                            $holiday_txt = "Overtime " . @$cash_carry->request_code;
+                            $sts_overtime += @$cash_carry->total_duration;
+                        } elseif (!empty($change_day->start)) {
+                            $holiday_txt = "Change Day to " . @$change_day->end;
+                            
+                            $att_cc_in_time = (isset($att_data[$record['number']][$change_day->end])) ? $att_data[$record['number']][$change_day->end]->time_in : "";
+                            $style = ($att_cc_in_time != "") ? "style='background: #B0ADFF;'" : "style='background: #FFADAD;'";
+                            $sts_changeday += 1;
+                        } elseif (!empty($change_day_end->end)) {
+                            $holiday_txt = "Change Day from " . @$change_day_end->start;
+                            
+                            $att_cc_out_time = (isset($att_data[$record['number']][$change_day_end->start])) ? $att_data[$record['number']][$change_day_end->start]->time_in : "";
+                            $style = ($att_cc_out_time != "") ? "style='background: #B0ADFF;'" : "style='background: #FFADAD;'";
+                            $sts_changeday += 1;
+                        } elseif (!empty($permit->permit_name)) {
+                            $holiday_txt = @$permit->note;
+                            $style = "style='background: #FDFFB0;'";
+                        } elseif (!empty($attandance->remarks)) {
+                            $holiday_txt = @$attandance->remarks;
+                        }
+                    } else {
+                        $holiday_txt = @$holiday->description;
+                        $style = "style='background: #FFBEB0;'";
+                    }
+
+                    if ((empty($attandance->time_in) || @$attandance->time_in == '00:00:00') && $holiday_txt != 'Weekend') {
+                        if (!empty($permit->permit_name)) {
+                            $attandance_status = @strtoupper($permit->permit_name);
+                            $style_status = "style='color:black; font-weight:bold;'";
+                            $sts_permit += 1;
+                            $shiftName = "";
+                        } elseif (!empty($holiday->description) || $holiday_txt == 'Weekend') {
+                            $attandance_status = "";
+                            $style_status = "style='color:red; font-weight:bold;'";
+                            $sts_weekend += 1;
+                            $shiftName = "";
+                        } elseif ((empty($attandance->time_in) || @$attandance->time_in == '00:00:00') && !empty($attandance->time_out) && $attandance->time_out != '00:00:00') {
+                            $attandance_status = "UN CHECK IN";
+                            $style_status = "style='color:blue; font-weight:bold;'";
+                            $sts_uncheckin += 1;
+                            $sts_workingday += 1;
+                            $shiftName = @$shift->name . " - " . @$shift->shift_name;
+                        } else {
+                            $attandance_status = "ABSENCE";
+                            $style_status = "style='color:red; font-weight:bold;'";
+                            $sts_absence += 1;
+                            $shiftName = @$shift->name . " - " . @$shift->shift_name;
+                        }
+                    } else {
+                        if ($holiday_txt == "Weekend" || (!empty($holiday->description) && empty($attandance->time_in))) {
+                            $attandance_status = "";
+                            $shiftName = "";
+                            $style_status = "style='color:red; font-weight:bold;'";
+                        } elseif (!empty($permit->permit_name)) {
+                            $attandance_status = @strtoupper($permit->permit_name);
+                            $shiftName = "";
+                            $style_status = "style='color:orange; font-weight:bold;'";
+                            $sts_workingday += 1;
+                        } else {
+                            
+                            $attandance_status = @$status_masuk;
+                            $shiftName = @$shift->name . " - " . @$shift->shift_name;
+                            $sts_workingday += 1;
+
+                            if (@$status_masuk == "LATE") {
+                                $style_status = "style='color:red; font-weight:bold;'";
+                                $sts_late += 1;
+                            } else if (@$status_masuk == "ON TIME") {
+                                $style_status = "style='color:green; font-weight:bold;'";
+                                $sts_ontime += 1;
+                            } else {
+                                $style_status = "style='color:orange; font-weight:bold;'";
+                                $sts_unsetting += 1;
+                            }
+                        }
+                    }
+
+                    if ($filter_status != "" or $filter_permit_type != "") {
+                        if ($holiday_txt == "") {
+                            if ($filter_status == $attandance_status || $attandance_status == @strtoupper($filter_permit_type)) {
+                                $html .= '<tr ' . $style . '>
+                                            <td>' . $no . '</td>
+                                            <td>' . date('d F Y', strtotime($working_date)) . '</td>
+                                            <td>' . $shiftName . '</td>
+                                            <td>' . @$shift->start . '</td>
+                                            <td>' . @$shift->end . '</td>
+                                            <td>' . @$attandance->time_in . '</td>
+                                            <td>' . @$attandance->time_out . '</td>
+                                            <td>' . @$cash_carry->total_duration . '</td>
+                                            <td ' . $style_status . '>' . $attandance_status . '</td>
+                                            <td>' . $holiday_txt . '</td>
+                                        </tr>';
+                            }
+                        }
+                    } else {
+                        $html .= '<tr ' . $style . '>
+                                    <td>' . $no . '</td>
+                                    <td>' . date('d F Y', strtotime($working_date)) . '</td>
+                                    <td>' . $shiftName . '</td>
+                                    <td>' . @$shift->start . '</td>
+                                    <td>' . @$shift->end . '</td>
+                                    <td>' . @$attandance->time_in . '</td>
+                                    <td>' . @$attandance->time_out . '</td>
+                                    <td>' . @$cash_carry->total_duration . '</td>
+                                    <td ' . $style_status . '>' . $attandance_status . '</td>
+                                    <td>' . $holiday_txt . '</td>
                                 </tr>';
                     }
 

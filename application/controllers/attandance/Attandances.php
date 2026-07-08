@@ -56,7 +56,7 @@ class Attandances extends CI_Controller
             $result = array();
 
             //Employee
-            $this->db->select("a.id, b.id as attandance_id, a.number, a.name, a.division_id, a.departement_id, a.departement_sub_id,coalesce(b.attandance_type,'Upload System') as attandance_type,
+            $this->db->select("a.id, b.id as attandance_id, a.number, a.name, a.division_id, a.departement_id, a.departement_sub_id,coalesce(b.attandance_type,'Upload HRIS') as attandance_type,
                 DAYNAME(b.date_in) as dayname,
                 b.date_in,
                 b.date_out,
@@ -102,7 +102,7 @@ class Attandances extends CI_Controller
         if ($this->input->post()) {
             if ($this->form_validation->run() == TRUE) {
                 $post   = $this->input->post();
-                $attandance = $this->crud->read("attandances", [], ["number" => $post['number'], "date_in" => $post['date_in'], "attandance_type" => "Input System"]);
+                $attandance = $this->crud->read("attandances", [], ["number" => $post['number'], "date_in" => $post['date_in'], "attandance_type" => "Input HRIS"]);
                 if ($attandance) {
                     echo json_encode(array("title" => "Available", "message" => "The attandance for this employee and date in has been created", "theme" => "error"));
                 } else {
@@ -349,7 +349,7 @@ class Attandances extends CI_Controller
                             'shift_name' => @$shift->name,
                             'shift_detail' => @$shift->shift_name,
                             'shift_days' => @$shift->days,
-                            'attandance_type' => 'Upload System'
+                            'attandance_type' => 'Upload HRIS'
                         );
 
                         $this->crud->update('attandances', ["id" => $attandance_in->id], $data_attandance, "no_log");
@@ -364,7 +364,7 @@ class Attandances extends CI_Controller
                             'shift_name' => @$shift->name,
                             'shift_detail' => @$shift->shift_name,
                             'shift_days' => @$shift->days,
-                            'attandance_type' => 'Upload System'
+                            'attandance_type' => 'Upload HRIS'
                             // 'time_out' => @$shift->end,
                         );
                         $this->crud->create('attandances', $data_attandance, "no_log");
@@ -414,7 +414,7 @@ class Attandances extends CI_Controller
                             'shift_name' => @$shift->name,
                             'shift_detail' => @$shift->shift_name,
                             'shift_days' => @$shift->days,
-                            'attandance_type' => 'Upload System'
+                            'attandance_type' => 'Upload HRIS'
                         );
                         $this->crud->update('attandances', ["id" => $attandance_out->id], $data_attandance, "no_log");
                         echo json_encode(array("title" => "Updated", "message" => $employee->name . " | " . $date_in . " " . $time_in . " Update data Check Out", "theme" => "success"));
@@ -429,7 +429,7 @@ class Attandances extends CI_Controller
                             'shift_name' => @$shift->name,
                             'shift_detail' => @$shift->shift_name,
                             'shift_days' => @$shift->days,
-                            'attandance_type' => 'Upload System'
+                            'attandance_type' => 'Upload HRIS'
                         );
                         $this->crud->create('attandances', $data_attandance, "no_log");
                         echo json_encode(array("title" => "Created", "message" => $employee->name . " | " . $date_in . " " . $time_in . " Create data Check Out", "theme" => "success"));
