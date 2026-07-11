@@ -21,54 +21,8 @@ class Change_days extends CI_Controller
     {
         show_error("Cannot Process your request");
     }
-
-    // public function reads($api_key = "", $limit = 30)
-    // {
-    //     if ($api_key != "") {
-    //         $user = $this->mobile->read("users", [], ["api_key" => $api_key]);
-
-    //         if ($user) {
-    //             $employee = $this->mobile->read("employees", [], ["number" => $user->number]);
-
-    //             $this->db->select('a.*,
-    //                 c.name as division_name,
-    //                 d.name as departement_name,
-    //                 e.name as departement_sub_name,
-    //                 b.number as employee_number,
-    //                 b.name as employee_name,
-    //                 f.name as fullname
-    //             ');
-    //             $this->db->from('change_days a');
-    //             $this->db->join('employees b', 'a.employee_id = b.id');
-    //             $this->db->join('divisions c', 'b.division_id = c.id');
-    //             $this->db->join('departements d', 'b.departement_id = d.id');
-    //             $this->db->join('departement_subs e', 'b.departement_sub_id = e.id');
-    //             $this->db->join('users f', "a.created_by = f.username");
-    //             $this->db->where('b.deleted', 0);
-    //             $this->db->where('b.status', 0);
-    //             $this->db->where('a.deleted', 0);
-    //             $this->db->like('b.id', $employee->id);
-    //             $this->db->group_by('a.start');
-    //             $this->db->group_by('a.employee_id');
-    //             $this->db->order_by('a.start', 'DESC');
-    //             $this->db->limit($limit);
-    //             $records = $this->db->get()->result_array();
-
-    //             die(json_encode(array(
-    //                 "title" => "Success",
-    //                 "message" => "Data Found",
-    //                 "theme" => "success",
-    //                 "results" => $records
-    //             )));
-    //         } else {
-    //             show_error("Api Key Invalid");
-    //         }
-    //     } else {
-    //         show_error("Cannot Process your request");
-    //     }
-    // }
-
-    public function reads($api_key = "", $year = '')
+    
+    public function reads($api_key = "", $year = "")
     {
         if ($api_key != "") {
             $user = $this->mobile->read("users", [], ["api_key" => $api_key]);
@@ -90,13 +44,13 @@ class Change_days extends CI_Controller
                 $this->db->join('departements d', 'b.departement_id = d.id');
                 $this->db->join('departement_subs e', 'b.departement_sub_id = e.id');
                 $this->db->join('users f', "a.created_by = f.username");
-                $this->db->where('YEAR(a.created_date)', $year);
+                $this->db->where('YEAR(a.start)', $year);
                 $this->db->where('b.deleted', 0);
                 $this->db->where('b.status', 0);
                 $this->db->where('a.deleted', 0);
                 $this->db->like('b.id', $employee->id);
-                $this->db->group_by('a.start');
-                $this->db->group_by('a.employee_id');
+                // $this->db->group_by('a.start');
+                // $this->db->group_by('a.employee_id');
                 $this->db->order_by('a.start', 'DESC');
                 // $this->db->limit($limit);
                 $records = $this->db->get()->result_array();
@@ -137,10 +91,14 @@ class Change_days extends CI_Controller
             $user = $this->mobile->read("users", [], ["api_key" => $api_key]);
 
             if ($user) {
-                if ($this->input->post()) {
+                if($this->input->post()){
                     $post = $this->input->post();
 
                     $employee = $this->mobile->read("employees", [], ["number" => $user->number]);
+
+                    // approval user
+                    $approval = $this->mobile->read("approvals", [], ["departement_id" => $employee->departement_id, "table_name" => "change_days"]);
+                    // $approvalUser = $this->mobile->read("users", [], ["username" => $approval->user_approval_1]);
 
                     $employee_id = $employee->id;
                     $request_code = $this->requestCode($post['start']);
@@ -148,18 +106,7 @@ class Change_days extends CI_Controller
                     $end = $post['end'];
                     $remarks = $post['remarks'];
 
-                    //approvalUser
-                    $approval = $this->mobile->read("approvals", [], ["departement_id" => $employee->departement_id, "table_name" => "change_days"]);
-                    // $approvalUser = $this->mobile->read("users", [], ["username" => $approval->user_approval_1]);
-
-                    if (!$approval) {
-                        show_error("Approval not found");
-                    }
-
                     $post_final = array(
-                        "approved" => 1,
-                        "approved_to" => $approval->user_approval_1,
-                        "approved_by" => $approval->user_approval_1,
                         "employee_id" =>  $employee_id,
                         "request_code" =>  $request_code,
                         "start" =>  $start,
@@ -171,27 +118,29 @@ class Change_days extends CI_Controller
 
                     if (count($change_days) > 0) {
                         show_error("Your change days application has been sent, please change to another date");
-                    } else {
-                        if ($this->mobile->create('change_days', $post_final, $user->username)) {
-                            if (!empty($approvalUser->api_key)) {
-                                $this->apps->where('api_key', @$approvalUser->api_key);
-                                $userAp = $this->apps->get('users')->row();
+                    }else{
+                        $result = $this->mobile->create('change_days', $post_final, $user->username);
+                        if($result){
 
-                                $message = "Sent a request to approve data Change Days";
+                            // buat fungsi update approved by berdasarkan siapa approved to nya
+                            // fungsi ini agar disamakan dengan web
+                            $values = array("approved_by" => @$approval->user_approval_1);
+                            $send = $this->db->update("change_days", $values, ["employee_id" => $employee_id, "request_code" => $request_code]);
 
-                                $this->mobile->pushNotification(@$userAp->token, $user->name, $message);
+                            if($send){
+                                die(json_encode(array(
+                                    "title" => "Success",
+                                    "message" => "Change Days Success Send",
+                                    "theme" => "success",
+                                )));
+                            } else {
+                                show_error("Change Days Failed To Send");
                             }
-
-                            die(json_encode(array(
-                                "title" => "Success",
-                                "message" => "Change Days Success Send",
-                                "theme" => "success"
-                            )));
-                        } else {
+                        }else{
                             show_error("Change Days Failed To Send");
                         }
                     }
-                } else {
+                }else{
                     show_error("Cannot Process your request");
                 }
             } else {
@@ -207,18 +156,18 @@ class Change_days extends CI_Controller
         if ($api_key != "") {
             $user = $this->mobile->read("users", [], ["api_key" => $api_key]);
             if ($user) {
-                if ($this->input->post()) {
+                if($this->input->post()){
                     $data = $this->input->post();
 
                     $delete = $this->mobile->delete("change_days", ['id' => $data['id']], $user->username);
                     echo $delete;
-                } else {
+                }else{
                     show_error("Cannot Process your request");
                 }
             } else {
                 show_error("Api Key Invalid");
             }
-        } else {
+        }else{
             show_error("Cannot Process your request");
         }
     }
