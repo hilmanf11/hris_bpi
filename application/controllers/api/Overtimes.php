@@ -399,6 +399,11 @@ class Overtimes extends CI_Controller
                     //approval
                     $approval = $this->mobile->read("approvals", [], ["departement_id" => $employee->departement_id, "table_name" => "cash_carries"]);
 
+                    if($approval === null){
+                        show_error("Approval Not Found, Please Contact Your Administrator for setting approval overtime.");
+                        return;
+                    }
+
                     $trans_date = $post['request_date'];
                     $employee_id = $employee->id;
                     $request_code = $this->requestCode($trans_date);
