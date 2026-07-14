@@ -11,6 +11,7 @@ class Employees extends CI_Controller
         $this->load->helper(array('form', 'url'));
         $this->load->library('form_validation');
         $this->load->library('session');
+        $this->load->library('Ciqrcode');
         $this->load->model('crud');
 
         //VALIDASI FORM
@@ -303,7 +304,7 @@ class Employees extends CI_Controller
         $offset = ($page - 1) * $rows;
         $result = array();
         //Select Query
-        $this->db->select('a.*, 
+        $this->db->select('a.*, FLOOR(DATEDIFF(CURDATE(), a.birthday) / 365.25) AS age,
                 b.users_id_from as status_check,
                 b.users_id_to as status_notification, 
                 c.name as division_name, 
@@ -961,7 +962,7 @@ class Employees extends CI_Controller
             $whereService2 = "";
         }
 
-        $this->db->select('a.*, 
+        $this->db->select('a.*, FLOOR(DATEDIFF(CURDATE(), a.birthday) / 365.25) AS age,
                 b.users_id_to as status_notification, 
                 c.number as division_number, 
                 c.name as division_name, 
@@ -1061,10 +1062,13 @@ class Employees extends CI_Controller
                 <th>Contract Expired</th>
                 <th>Resign Date</th>
                 <th>Fit Of Service</th>
+                <th>Level of Education</th>
+                <th>Degree</th>
                 <th>Address</th>
                 <th>Place Birth</th>
                 <th>Birthday</th>
                 <th>Gender</th>
+                <th>Age</th>
                 <th>Blood</th>
                 <th>Religion</th>
                 <th>Marital</th>
@@ -1118,10 +1122,13 @@ class Employees extends CI_Controller
                     <td>' . $data['date_expired'] . '</td>
                     <td>' . $data['resign_date'] . '</td>
                     <td>' . $this->readService($data['date_sign']) . '</td>
+                    <td></td>
+                    <td></td>
                     <td>' . $data['address'] . '</td>
                     <td>' . $data['place_birth'] . '</td>
                     <td>' . $data['birthday'] . '</td>
                     <td>' . $data['gender'] . '</td>
+                    <td>' . $data['age'] . ' Year</td>
                     <td>' . $data['blood'] . '</td>
                     <td>' . $data['religion_name'] . '</td>
                     <td>' . $data['marital_name'] . '</td>
@@ -1152,4 +1159,283 @@ class Employees extends CI_Controller
         $html .= '</table></body></html>';
         echo $html;
     }
+
+    public function employee_qrcode($number = null){
+        $employee_number = $number;
+        if($employee_number == null){
+            $employee_number = $this->input->get('number');
+        }
+
+        if($employee_number == null){
+            show_error("Employee not found");
+            return;
+        }
+
+        $employee = $this->crud->read('employees', [], ["number" => $employee_number]);
+        if(!$employee){
+            show_error("Employee not found in database");
+            return;
+        }
+
+        $this->createQrcode($employee->number, "assets/image/qrcode/");
+
+        $division = $this->crud->read('divisions', [], ["id" => $employee->division_id]);
+        $department = $this->crud->read('departements', [], ["id" => $employee->departement_id]);
+        $position = $this->crud->read('positions', [], ["id" => $employee->position_id]);
+        ?>
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Employee QR Code - <?= htmlspecialchars($employee->name) ?></title>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+            <style>
+                body {
+                    font-family: 'Inter', sans-serif;
+                    background: #f3f4f6;
+                    margin: 0;
+                    padding: 40px 20px;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    min-height: 100vh;
+                    color: #1f2937;
+                }
+
+                .actions {
+                    margin-bottom: 20px;
+                    display: flex;
+                    gap: 12px;
+                }
+
+                .btn {
+                    display: inline-flex;
+                    align-items: center;
+                    padding: 10px 20px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    border-radius: 8px;
+                    border: none;
+                    cursor: pointer;
+                    text-decoration: none;
+                    transition: all 0.2s ease;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                }
+
+                .btn-primary {
+                    background-color: #4f46e5;
+                    color: white;
+                }
+
+                .btn-primary:hover {
+                    background-color: #4338ca;
+                }
+
+                .btn-secondary {
+                    background-color: white;
+                    color: #374151;
+                    border: 1px solid #d1d5db;
+                }
+
+                .btn-secondary:hover {
+                    background-color: #f9fafb;
+                }
+
+                .card {
+                    background: white;
+                    border-radius: 16px;
+                    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+                    width: 320px;
+                    padding: 32px 24px;
+                    text-align: center;
+                    border: 1px solid #e5e7eb;
+                    position: relative;
+                    overflow: hidden;
+                }
+
+                .card::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    height: 6px;
+                    background: linear-gradient(90deg, #4f46e5, #06b6d4);
+                }
+
+                .employee-name {
+                    font-size: 20px;
+                    font-weight: 700;
+                    color: #111827;
+                    margin: 0 0 4px 0;
+                }
+
+                .employee-number {
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #4f46e5;
+                    letter-spacing: 0.05em;
+                    margin-bottom: 16px;
+                }
+
+                .divider {
+                    height: 1px;
+                    background-color: #e5e7eb;
+                    margin: 20px 0;
+                }
+
+                .qr-container {
+                    background: #f9fafb;
+                    border: 1px dashed #d1d5db;
+                    border-radius: 12px;
+                    padding: 16px;
+                    display: inline-block;
+                    margin-bottom: 20px;
+                }
+
+                .info-grid {
+                    text-align: left;
+                    font-size: 13px;
+                }
+
+                .info-row {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 8px;
+                }
+
+                .info-label {
+                    color: #6b7280;
+                    font-weight: 500;
+                }
+
+                .info-value {
+                    color: #374151;
+                    font-weight: 600;
+                    text-align: right;
+                }
+
+                @media print {
+                    body {
+                        background: white;
+                        padding: 0;
+                        min-height: auto;
+                    }
+                    .actions {
+                        display: none;
+                    }
+                    .card {
+                        box-shadow: none;
+                        border: 1px solid #ccc;
+                        margin: 0 auto;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+
+            <div class="actions">
+                <!-- <button class="btn btn-primary" onclick="window.print()">
+                    <svg style="width: 16px; height: 16px; margin-right: 6px; fill: currentColor;" viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+                    Print Card
+                </button> -->
+                <button type="button" onclick="downloadQrOnly()" class="btn btn-secondary">
+                    <svg style="width: 16px; height: 16px; margin-right: 6px; fill: currentColor;" viewBox="0 0 24 24">
+                        <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/>
+                    </svg>
+                    Download QR Only
+                </button>
+                <button type="button" onclick="downloadCard()" class="btn btn-primary">
+                    <svg style="width: 16px; height: 16px; margin-right: 6px; fill: currentColor;" viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+                    Download QR Card
+                </button>
+            </div>
+
+            <script src="<?= base_url('assets/html2canvas.min.js') ?>"></script>
+
+            <div id="id-card-absen" class="card" style="text-align: center; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); max-width: 320px; margin: auto; background: #fff;">
+                
+                <div class="header-container" style="display: flex; align-items: center; justify-content: flex-end; gap: 5px; margin-bottom: 20px; width: 100%;">
+                    <img src="<?= base_url('assets/image/config/logo/1696477096.png') ?>" crossorigin="anonymous" alt="BPI Logo" style="width: 50px; height: auto; object-fit: contain; flex-shrink: 0;">
+                    
+                    <div class="company-name" style="text-align: left; color: #012970; font-size: 11px; font-weight: 800; line-height: 1.2; letter-spacing: 0.3px; max-width: 120px;">
+                        PT. BANSHU PLASTIC INDONESIA
+                    </div>
+                </div>
+
+                <div class="qr-container" style="margin-bottom: 15px;">
+                    <img class="qr-code" src="<?= base_url('assets/image/qrcode/'.$employee->number.'.png') ?>" crossorigin="anonymous" alt="QRCode" style="width: 200px; height: auto; object-fit: contain; flex-shrink: 0;">
+                </div>
+
+                <div class="divider" style="border-top: 1px dashed #ccc; margin: 15px 0;"></div>
+
+                <div class="employee-name" style="font-weight: bold; font-size: 18px; margin-bottom: 5px;"><?= htmlspecialchars($employee->name) ?></div>
+                <div class="employee-number" style="color: #666; font-size: 14px; margin-bottom: 15px;">NIK: <?= htmlspecialchars($employee->number) ?></div>
+                
+                <div class="info-grid" style="font-size: 14px; text-align: left; background: #f9f9f9; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+                    <div class="info-row" style="display: flex; justify-content: space-between;">
+                        <span class="info-label" style="color: #888;">Department</span>
+                        <span class="info-value" style="font-weight: 500;"><?= htmlspecialchars(@$department->name ? $department->name : '-') ?></span>
+                    </div>
+                </div>
+
+                <div class="card-footer-note" style="font-size: 11px; font-style: italic; color: #777; line-height: 1.4; padding: 0 5px;">
+                    * Gunakan QRCode ini untuk melakukan absen kehadiran di PT. Banshu Plastic Indonesia
+                </div>
+            </div>
+
+            <script>
+                function downloadCard() {
+                    const cardElement = document.getElementById('id-card-absen');
+                    const name = '<?= htmlspecialchars($employee->name) ?>'.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                    const qrImg = cardElement.querySelector('.qr-code');
+
+                    // Trik Jaminan Tampil: Paksa browser memvalidasi ulang cache cache gambar QR sebelum dipotret
+                    if (qrImg) {
+                        const srcUrl = qrImg.src;
+                        qrImg.src = '';
+                        qrImg.src = srcUrl;
+                    }
+
+                    const options = {
+                        scale: 3, 
+                        useCORS: true,      // Wajib aktif untuk membaca folder assets/
+                        allowTaint: false,  
+                        backgroundColor: "#ffffff"
+                    };
+
+                    // Delay 200ms untuk memberikan waktu sinkronisasi ulang piksel gambar ke canvas
+                    setTimeout(function() {
+                        html2canvas(cardElement, options).then(canvas => {
+                            const link = document.createElement('a');
+                            link.href = canvas.toDataURL("image/png");
+                            link.download = 'qrcode_' + name + '.png';
+                            link.click();
+                        }).catch(err => {
+                            console.error("Gagal melakukan render gambar:", err);
+                        });
+                    }, 200);
+                }
+
+                function downloadQrOnly() {
+                    const qrUrl = "<?= base_url('assets/image/qrcode/' . $employee->number . '.png') ?>";
+                    const name = '<?= htmlspecialchars($employee->name) ?>'.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                    
+                    const link = document.createElement('a');
+                    link.href = qrUrl;
+                    link.download = 'qrcode_only_' + name + '.png';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            </script>
+
+        </body>
+        </html>
+        <?php
+    }
+
+   
 }

@@ -4,6 +4,7 @@
         <tr>
             <th rowspan="2" field="ck" checkbox="true"></th>
             <th rowspan="2" data-options="field:'image_profile',width:35,halign:'center',formatter:FormatterImage">Foto</th>
+            <th rowspan="2" data-options="field:'qr',width:50,halign:'center',formatter:FormatterQR">QR</th>
             <th rowspan="2" data-options="field:'details',width:50,halign:'center',formatter:FormatterDetail">Detail</th>
             <th rowspan="2" data-options="field:'number',width:120,halign:'center'">Employee ID</th>
             <th rowspan="2" data-options="field:'name',width:200,halign:'center'">Fullname</th>
@@ -1089,6 +1090,13 @@
 
         window.location.assign('<?= base_url('employee/employees/print/excel') ?>' + url);
     }
+
+    //PRINT QR CODE EMPLOYEE
+    function employee_qrcode(number = 0){
+        var url = "?number=" + number;
+        window.open('<?= base_url('employee/employees/employee_qrcode') ?>' + url);
+    }
+
     //RELOAD
     function reload() {
         window.location.reload();
@@ -2363,6 +2371,10 @@
         } else {
             return '<img style="width: 100%;" src="' + val + '" />';
         }
+    };
+
+    function FormatterQR(val, row) {
+        return '<a class="button-green" style="width:100%;" href="<?= base_url('employee/employees/employee_qrcode/') ?>' + row.number + '" target="_blank"><i class="fa fa-qrcode"></i></a>';
     };
 
     function FormatterDetail(val, row) {
