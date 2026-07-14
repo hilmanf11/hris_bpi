@@ -12,6 +12,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
     <style>
         * {
@@ -170,6 +171,11 @@
             max-width: 650px; /* Diperbesar dari 420px */
             box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.5);
         }
+
+        /* Fix html5-qrcode UI overrides */
+        #reader { border: none !important; }
+        #reader video { border-radius: 12px !important; object-fit: cover !important; }
+        #reader__dashboard_section_csr span { color: #3b82f6 !important; }
     </style>
 </head>
 <body>
@@ -198,9 +204,14 @@
         <div class="card kiosk-card rounded-4 p-4 p-md-4">
 
             <div class="kiosk-screen-handler" id="screen-waiting">
-                <span class="badge badge-terminal rounded-pill px-3 py-2 mb-4">♦ EMPLOYEE ATTENDANCE</span>
+                <span class="badge badge-terminal rounded-pill px-3 py-2 mb-3">♦ EMPLOYEE ATTENDANCE</span>
                 
-                <div class="white-box-scanner bg-white text-dark rounded-4 p-5 text-center">
+                 <div class="d-flex justify-content-center gap-2 mb-4 flex-nowrap" style="width: 100%; max-width: 450px; margin: 0 auto;">
+                    <button id="btn-mode-scanner" class="btn btn-outline-primary btn-scanner rounded-pill fw-bold" style="flex: 1; position: relative; z-index: 9999; pointer-events: auto; cursor: pointer; white-space: nowrap; font-size: 14px; padding: 10px 10px;">Via Scanner</button>
+                    <button id="btn-mode-camera" class="btn btn-primary btn-camera rounded-pill fw-bold" style="flex: 1; position: relative; z-index: 9999; pointer-events: auto; cursor: pointer; white-space: nowrap; font-size: 14px; padding: 10px 10px;">✓ Camera Active</button>
+                </div>
+
+                <div id="scanner-mode-box" class="white-box-scanner bg-white text-dark rounded-4 p-5 text-center d-none">
                     <div class="mb-5 text-primary">
                         <svg width="60" height="60" viewBox="0 0 24 24" fill="#3b82f6">
                             <path d="M3 3h8v8H3zm2 2v4h4V5zm11-2h5v5h-5zm2 2v1h1V5zm-13 11h8v8H3zm2 2v4h4v-4zm11-2h2v2h-2zm2 2h3v3h-3zm-2 3h2v2h-2zm4-3h1v1h-1zm-1-2h1v1h-1zm4 2h1v3h-1z"/></svg>
@@ -208,6 +219,13 @@
                     <h2 class="h5 text-dark mb-2" style="font-weight: 800; letter-spacing: 0.5px;">SCAN QR CODE FOR ATTENDANCE HERE</h2>
                     <div class="scanner-status-dot d-inline-flex align-items-center gap-2">
                         <span class="pulse-dot"></span> SCANNER ACTIVE
+                    </div>
+                </div>
+
+                <div id="camera-mode-box" class="bg-white rounded-4 p-4 text-center" style="width: 100%; max-width: 400px; margin: 0 auto; box-shadow: inset 0 0 0 2px #3b82f6; position: relative;">
+                    <div id="reader" style="width: 100%; min-height: 250px; overflow: hidden; border-radius: 12px; background: #f8fafc; display: flex; align-items: center; justify-content: center;"></div>
+                    <div class="scanner-status-dot d-inline-flex align-items-center gap-2 mt-4">
+                        <span class="pulse-dot"></span> CAMERA ACTIVE
                     </div>
                 </div>
                 
@@ -277,13 +295,15 @@
 <script>
     $(document).ready(function() {
         const scannerInput = $('#scanner-input');
+        window.currentMode = 'camera'; // Default mode kamera
+        window.html5QrCode = null;
 
         // 1. FUNGSI FOKUS OTOMATIS (Bebas Klik)
         function maintainFocus() {
-            scannerInput.focus();
+            if (window.currentMode === 'scanner') {
+                scannerInput.focus();
+            }
         }
-        
-        maintainFocus();
 
         $(window).on('focus', function() {
             maintainFocus();
@@ -293,8 +313,11 @@
             setTimeout(maintainFocus, 50); 
         });
 
-        $(document).on('click', function() { 
-            maintainFocus(); 
+        $(document).on('click touchstart', function(e) { 
+            // Jangan jalankan maintainFocus jika yang di-klik adalah tombol atau elemen di dalam tombol
+            if (!$(e.target).closest('button').length) {
+                maintainFocus(); 
+            }
         });
 
 
@@ -321,6 +344,96 @@
                 }
             }
         });
+
+        $('#btn-mode-camera').on('click touchstart', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            switchMode('camera');
+        });
+
+        $('#btn-mode-scanner').on('click touchstart', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            switchMode('scanner');
+        });
+
+        function showNotification(msg) {
+            let notif = $('<div style="position:fixed; top:20px; right:20px; background:#3b82f6; color:white; padding:15px 25px; border-radius:8px; box-shadow:0 10px 15px rgba(0,0,0,0.2); z-index:9999; font-weight:700; transform:translateY(-20px); opacity:0; transition:all 0.3s ease;">' + msg + '</div>');
+            $('body').append(notif);
+            setTimeout(() => { notif.css({transform: 'translateY(0)', opacity: 1}); }, 10);
+            setTimeout(() => { 
+                notif.css({transform: 'translateY(-20px)', opacity: 0}); 
+                setTimeout(() => notif.remove(), 300);
+            }, 3000);
+        }
+
+        function switchMode(mode) {
+            if (window.currentMode === mode && mode !== 'camera') return; // Jangan lakukan apa-apa jika mode sudah aktif
+            window.currentMode = mode;
+
+            if (mode === 'camera') {
+                showNotification('📸 Mode Kamera Diaktifkan');
+                $('#scanner-mode-box').addClass('d-none');
+                $('#camera-mode-box').removeClass('d-none');
+                
+                $('#btn-mode-scanner').html('Via Scanner').removeClass('btn-primary').addClass('btn-outline-primary');
+                $('#btn-mode-camera').html('✓ Camera Active').removeClass('btn-outline-primary').addClass('btn-primary');
+                
+                if (typeof Html5Qrcode === 'undefined') {
+                    alert('Script scanner belum termuat sepenuhnya. Harap periksa koneksi internet atau tunggu beberapa saat.');
+                    return;
+                }
+
+                if (!window.html5QrCode) {
+                    window.html5QrCode = new Html5Qrcode("reader");
+                }
+                
+                Html5Qrcode.getCameras().then(devices => {
+                    if (devices && devices.length) {
+                        window.html5QrCode.start(
+                            { facingMode: "environment" }, 
+                            {
+                                fps: 10,
+                                qrbox: { width: 250, height: 250 }
+                            },
+                            (decodedText, decodedResult) => {
+                                if (window.html5QrCode.getState() === 2) { // 2 = SCANNING
+                                    window.html5QrCode.pause();
+                                    processAbsen(decodedText);
+                                }
+                            },
+                            (errorMessage) => {
+                                // ignore background errors
+                            }
+                        ).catch((err) => {
+                            console.log("Error starting camera: ", err);
+                            alert("Kamera tidak dapat diakses. Pastikan Anda telah memberikan izin (allow) pada browser.");
+                        });
+                    } else {
+                        alert("Tidak ada kamera yang terdeteksi di perangkat ini.");
+                    }
+                }).catch(err => {
+                    console.log("Error getting cameras: ", err);
+                    alert("Gagal mendapatkan daftar kamera.");
+                });
+
+            } else {
+                showNotification('📟 Mode Scanner Diaktifkan');
+                $('#scanner-mode-box').removeClass('d-none');
+                $('#camera-mode-box').addClass('d-none');
+                
+                $('#btn-mode-scanner').html('✓ Scanner Active').removeClass('btn-outline-primary').addClass('btn-primary');
+                $('#btn-mode-camera').html('Via Camera QR').removeClass('btn-primary').addClass('btn-outline-primary');
+                
+                if (window.html5QrCode && window.html5QrCode.getState() === 2) {
+                    window.html5QrCode.stop().then(() => {
+                        maintainFocus();
+                    }).catch(err => console.log(err));
+                } else {
+                    maintainFocus();
+                }
+            }
+        }
 
         // 4. FUNGSI AJAX
         function processAbsen(data) {
@@ -353,6 +466,9 @@
                         setTimeout(function() {
                             $('#screen-success').addClass('d-none');
                             $('#status-area').html('<h3>Place your Employee QR Card in front of the scanner</h3>');
+                            if (window.currentMode === 'camera' && window.html5QrCode && window.html5QrCode.getState() === 3) { // 3 = PAUSED
+                                window.html5QrCode.resume();
+                            }
                         }, 4000); 
 
                     } else {
@@ -362,14 +478,22 @@
                         });
                         alert(response.message);
                         $('#status-area').html('<h3>Place your Employee QR Card in front of the scanner</h3>');
+                        if (window.currentMode === 'camera' && window.html5QrCode && window.html5QrCode.getState() === 3) {
+                            window.html5QrCode.resume();
+                        }
                     }
                 },
                 error: function(xhr, status, error) {
                     alert("Koneksi bermasalah dengan server.");
                     $('#status-area').html('<h3>Place your Employee QR Card in front of the scanner</h3>');
+                    if (window.currentMode === 'camera' && window.html5QrCode && window.html5QrCode.getState() === 3) {
+                        window.html5QrCode.resume();
+                    }
                 }
             });
         }
+        // Auto-start camera mode saat halaman dibuka
+        switchMode('camera');
     });
 </script>
 

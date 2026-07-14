@@ -246,6 +246,105 @@ class Crud extends CI_Model
         }
     }
 
+
+    function logs_nosession($action, $records, $table, $username)
+    {
+        $id = $this->autoid('logs');
+        $data = array(
+            "created_by" => $username,
+            "created_date" => date('Y-m-d H:i:s'),
+            "ip_address" => $this->input->ip_address(),
+            "action" => $action,
+            "menu" => $table,
+            "description" => $records
+        );
+
+        $this->db->insert('logs', $data);
+    }
+
+    function create_nosession($table, $values, $logs = "", $username = "")
+    {
+        if ($username != "") {
+            $id = $this->autoid($table);
+            $data = array_merge($values, [
+                "id" => $id,
+                "created_by" => $username,
+                "created_date" => date('Y-m-d H:i:s')
+            ]);
+
+            if ($this->db->insert($table, $data)) {
+                if($logs == ""){
+                    $this->logs_nosession("Create", json_encode($data), $table, $username);
+                    $this->approvals_nosession($table, $id, $username);
+                }
+                return json_encode(array("title" => "Good Job", "message" => "Data Saved Successfully", "theme" => "success"));
+            } else {
+                return log_message('error', 'There is an error in your system or data');
+            }
+        } else {
+            return log_message('error', 'Your Session has been Expired');
+        }
+    }
+
+    function update_nosession($table, $where, $values, $logs = "", $username = "")
+    {
+        if ($username != "") {
+            $data   = array_merge($values, [
+                "updated_by" => $username,
+                "updated_date" => date('Y-m-d H:i:s')
+            ]);
+
+            $dataBefore = $this->read($table, [], $where);
+
+            $this->db->where($where);
+            if ($this->db->update($table, $data)) {
+                if($logs == ""){
+                    $this->logs_nosession("Update Before", json_encode($dataBefore), $table, $username);
+                    $this->logs_nosession("Update New", json_encode($data), $table, $username);
+                    
+                    $read = $this->read($table, [], $where);
+                    $this->approvals_nosession($table, @$read->id, $username);
+                }
+
+                return json_encode(array("title" => "Good Job", "message" => "Data Updated Successfully", "theme" => "success"));
+            } else {
+                return log_message('error', 'There is an error in your system or data');
+            }
+        } else {
+            return log_message('error', 'Your Session has been Expired');
+        }
+    }
+
+    function approvals_nosession($table, $table_id, $username)
+    {
+        $query = $this->db->query("DESCRIBE $table");
+        $fields = $query->result_array();
+
+        $user = $this->read('users', [], ["username" => $username]);
+        $approval = $this->read('approvals', [], ["table_name" => $table, "departement_id" => @$user->departement_id]);
+
+        $fieldExists = false;
+        foreach ($fields as $field) {
+            if ($field['Field'] == "approved") {
+                $fieldExists = true;
+                break;
+            }
+        }
+
+        if ($fieldExists) {
+            if (!empty($approval)) {
+                $formApprove = [
+                    "approved" => 1,
+                    "approved_to" => $approval->user_approval_1,
+                    "approved_by" => $username,
+                ];
+
+                $this->db->where(["id" => $table_id]);
+                $this->db->update($table, $formApprove);
+            }
+        }
+    }
+
     // function approvals($table, $table_id)
     // {
     //     $id = $this->autoid('notifications');
