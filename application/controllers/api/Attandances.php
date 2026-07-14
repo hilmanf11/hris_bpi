@@ -22,28 +22,46 @@ class Attandances extends CI_Controller
         show_error("Cannot Process your request");
     }
 
-    public function reads($api_key = "", $limit = 31)
+    public function reads($api_key = "")
     {
+
+        $post = $this->input->post();
 
         if ($api_key != "") {
             $user = $this->mobile->read("users", [], ["api_key" => $api_key]);
 
+
+            if (!$post) {
+                show_error("Request failed, date is empty");
+            }
+
+            $date = $post['date'];
+
             if ($user) {
-                $attandances = $this->mobile->query("SELECT date_in, date_out, time_in, time_out, foto_in, foto_out FROM attandances WHERE number = '$user->number' ORDER BY date_in DESC LIMIT $limit");
+                $attandances = $this->mobile->query("SELECT date_in, date_out, time_in, time_out, foto_in, foto_out FROM attandances WHERE number = '$user->number' AND date_in LIKE '$date%' ORDER BY date_in DESC");
 
                 $datas = array();
                 foreach ($attandances as $attandance) {
-                    if (!empty($attandance->foto_in)) {
-                        $folder = date("Ym", strtotime($attandance->date_in));
-                        $foto_in = 'assets/document/attendance/' . $folder . '/' . $attandance->foto_in;
-                    } else {
+                    $folder_in = date("Ym", strtotime($attandance->date_in));
+                    $folder_out = date("Ym", strtotime($attandance->date_out));
+
+                    if(!empty($attandance->foto_in)){
+                        if(substr($attandance->foto_in, -4) == "jpeg"){
+                            $foto_in = 'assets/document/attendance/'.$folder_in.'/'. substr($attandance->foto_in, -15);
+                        }else{
+                            $foto_in = 'assets/document/attendance/'.$folder_in.'/'. substr($attandance->foto_in, -14);
+                        }
+                    }else{
                         $foto_in = null;
                     }
-
-                    if (!empty($attandance->foto_out)) {
-                        $folder = date("Ym", strtotime($attandance->date_out));
-                        $foto_out = 'assets/document/attendance/' . $folder . '/' . $attandance->foto_out;
-                    } else {
+                    
+                    if(!empty($attandance->foto_out)){
+                        if(substr($attandance->foto_out, -4) == "jpeg"){
+                            $foto_out = 'assets/document/attendance/'.$folder_out.'/'. substr($attandance->foto_out, -15);
+                        }else{
+                            $foto_out = 'assets/document/attendance/'.$folder_out.'/'. substr($attandance->foto_out, -14);
+                        }
+                    }else{
                         $foto_out = null;
                     }
 
@@ -73,12 +91,13 @@ class Attandances extends CI_Controller
 
     public function list($api_key = "")
     {
+
         $post = $this->input->post();
 
         if ($api_key != "") {
             $user = $this->mobile->read("users", [], ["api_key" => $api_key]);
 
-            if (!$post) {
+            if(!$post) {
                 show_error("Request failed, date is empty");
             }
 
@@ -92,23 +111,23 @@ class Attandances extends CI_Controller
                     $folder_in = date("Ym", strtotime($attandance->date_in));
                     $folder_out = date("Ym", strtotime($attandance->date_out));
 
-                    if (!empty($attandance->foto_in)) {
-                        if (substr($attandance->foto_in, -4) == "jpeg") {
-                            $foto_in = 'assets/document/attendance/' . $folder_in . '/' . substr($attandance->foto_in, -15);
-                        } else {
-                            $foto_in = 'assets/document/attendance/' . $folder_in . '/' . substr($attandance->foto_in, -14);
+                    if(!empty($attandance->foto_in)){
+                        if(substr($attandance->foto_in, -4) == "jpeg"){
+                            $foto_in = 'assets/document/attendance/'.$folder_in.'/'. substr($attandance->foto_in, -15);
+                        }else{
+                            $foto_in = 'assets/document/attendance/'.$folder_in.'/'. substr($attandance->foto_in, -14);
                         }
-                    } else {
+                    }else{
                         $foto_in = null;
                     }
-
-                    if (!empty($attandance->foto_out)) {
-                        if (substr($attandance->foto_out, -4) == "jpeg") {
-                            $foto_out = 'assets/document/attendance/' . $folder_out . '/' . substr($attandance->foto_out, -15);
-                        } else {
-                            $foto_out = 'assets/document/attendance/' . $folder_out . '/' . substr($attandance->foto_out, -14);
+                    
+                    if(!empty($attandance->foto_out)){
+                        if(substr($attandance->foto_out, -4) == "jpeg"){
+                            $foto_out = 'assets/document/attendance/'.$folder_out.'/'. substr($attandance->foto_out, -15);
+                        }else{
+                            $foto_out = 'assets/document/attendance/'.$folder_out.'/'. substr($attandance->foto_out, -14);
                         }
-                    } else {
+                    }else{
                         $foto_out = null;
                     }
 
@@ -136,80 +155,31 @@ class Attandances extends CI_Controller
         }
     }
 
-    public function locationTest()
+    public function location()
     {
-        if (!$this->input->post()) {
+        $this->apps = $this->load->database('apps', TRUE);
+
+        if ($this->input->post()) {
+            $post = $this->input->post();
+            
+            // $this->apps->where('link', $post['link']);
+            // $group = $this->apps->get('companies')->row();
+
+            $this->apps->select("*");
+            $this->apps->from('companies');
+            $this->apps->where('link', $post['link']);
+            $companies = $this->apps->get()->result_array();
+
+            die(json_encode(array(
+                "title" => "Success",
+                "message" => "Data Found",
+                "theme" => "success",
+                "results" => $companies
+            )));
+        } else {
             show_error("Cannot Process your request");
         }
-
-        $post = $this->input->post();
-
-        $url = "https://app.hris-server.com/";
-
-        $payload = [
-            "link" => $post['link'],
-            "get" => 'location'
-        ];
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($payload));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/x-www-form-urlencoded'
-        ]);
-
-        $response = curl_exec($ch);
-
-        if (curl_errno($ch)) {
-            echo json_encode([
-                "title" => "Error",
-                "message" => curl_error($ch),
-                "theme" => "error"
-            ]);
-            curl_close($ch);
-            exit;
-        }
-
-        curl_close($ch);
-
-        // Kalau API tujuan return JSON
-        $result = json_decode($response, true);
-
-        echo json_encode([
-            "title" => "Success",
-            "message" => "Request success",
-            "theme" => "success",
-            "results" => $result
-        ]);
-        exit;
     }
-
-    // public function location()
-    // {
-    //     $this->apps = $this->load->database('apps', TRUE);
-
-    //     if ($this->input->post()) {
-    //         $post = $this->input->post();
-
-    //         $this->apps->where('link', $post['link']);
-    //         $group = $this->apps->get('companies')->row();
-
-    //         $this->apps->select("*");
-    //         $this->apps->from('companies');
-    //         $this->apps->where('link', 'http://bpi.astechno.net/hris-bpi/');
-    //         $companies = $this->apps->get()->result_array();
-
-    //         die(json_encode(array(
-    //             "title" => "Success",
-    //             "message" => "Data Found",
-    //             "theme" => "success",
-    //             "results" => $companies
-    //         )));
-    //     } else {
-    //         show_error("Cannot Process your request");
-    //     }
-    // }
 
     public function locationUpdate()
     {
@@ -263,7 +233,8 @@ class Attandances extends CI_Controller
                                 'number' => $user->number,
                                 'date_out' => $post['date_out'],
                                 'time_out' => $post['time_out'],
-                                'foto_out' => @$foto
+                                'foto_out' => @$foto,
+                                'status' => 'MOBILE',
                             );
 
                             if ($this->mobile->update('attandances', ["id" => @$attandance_in->id], $data, $user->username)) {
@@ -299,6 +270,7 @@ class Attandances extends CI_Controller
                                 "shift_name" => @$shift->shift_name,
                                 "shift_detail" => @$shift->name,
                                 "shift_days" => @$shift->days,
+                                'status' => 'MOBILE',
                             );
 
                             if ($this->mobile->create('attandances', $data, $user->username)) {
