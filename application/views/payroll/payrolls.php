@@ -164,6 +164,7 @@
 
     <?= $button ?>
     <a href="javascript:;" class="easyui-linkbutton" data-options="plain:true" onclick="excel2()"><i class="fa fa-file"></i> Export Excel 2</a>
+    <a href="javascript:;" class="easyui-linkbutton" data-options="plain:true" onclick="export_csv()"><i class="fa fa-file"></i> Export CSV</a>
 </div>
 
 <div id="dlg_generate" class="easyui-dialog" title="Generating Data" data-options="closed: true,modal:true,closable: false" style="width: 500px; padding:10px; top: 20px;">
@@ -488,6 +489,33 @@
             window.location.assign('<?= base_url('payroll/payrolls/print2/excel') ?>' + url);
         }
     }
+
+    function export_csv() {
+        var filter_from = $("#filter_from").combogrid('getValue');
+        var filter_to = $("#filter_to").textbox('getValue');
+        var filter_division = $("#filter_division").combobox('getValue');
+        var filter_departement = $("#filter_departement").combobox('getValue');
+        var filter_departement_sub = $("#filter_departement_sub").combobox('getValue');
+        var filter_employee = $("#filter_employee").combogrid('getValue');
+        var filter_employee_type = $("#filter_employee_type").combobox('getValue');
+        var filter_group = $("#filter_group").combobox('getValue');
+
+        var url = "?filter_from=" + filter_from +
+            "&filter_to=" + filter_to +
+            "&filter_division=" + filter_division +
+            "&filter_departement=" + filter_departement +
+            "&filter_departement_sub=" + filter_departement_sub +
+            "&filter_employee=" + filter_employee +
+            "&filter_employee_type=" + filter_employee_type +
+            "&filter_group=" + filter_group;
+
+        if (filter_from == "" || filter_to == "") {
+            toastr.warning("Please Enter Cut Off Period");
+        } else {
+            window.location.assign('<?= base_url('payroll/payrolls/export_csv') ?>' + url);
+        }
+    }
+
     //RELOAD
     function reload() {
         window.location.reload();

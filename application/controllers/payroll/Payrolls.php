@@ -1708,4 +1708,126 @@ class Payrolls extends CI_Controller
                 </html>';
         echo $html;
     }
+
+    // EXPORT KE CSV SESUAI FORMAT GAMBAR (MANDIRI MASS TRANSFER)
+    public function export_csv()
+    {
+        $filter_from = $this->input->get('filter_from');
+        $filter_to = $this->input->get('filter_to');
+        $filter_division = $this->input->get('filter_division');
+        $filter_departement = $this->input->get('filter_departement');
+        $filter_departement_sub = $this->input->get('filter_departement_sub');
+        $filter_employee = $this->input->get('filter_employee');
+        $filter_employee_type = $this->input->get('filter_employee_type');
+        $filter_group = $this->input->get('filter_group');
+        $username = $this->session->username;
+
+        $period_start = date("Y-m", strtotime($filter_from));
+        $period_end = date("Y-m", strtotime($filter_to));
+
+        // 1. Ambil data dari database (Query disesuaikan dari print2 Anda)
+        $query = $this->db->query("SELECT a.*, b.national_id, d.name as source_name, b.email,b.gender, b.bank_no, b.bank_name, b.bank_branch, b.number as employee_nik
+                FROM payrolls a
+                JOIN employees b on a.employee_id = b.id
+                LEFT JOIN sources d on b.source_id = d.id
+                JOIN privilege_groups c ON b.group_id = c.group_id and c.username = '$username' and c.status = '1'
+                WHERE a.period_start = '$period_start' 
+                AND a.period_end = '$period_end'
+                AND b.division_id LIKE '%$filter_division%'
+                AND b.departement_id LIKE '%$filter_departement%'
+                AND b.departement_sub_id LIKE '%$filter_departement_sub%'
+                AND a.employee_id LIKE '%$filter_employee%'
+                AND b.contract_id LIKE '%$filter_employee_type%'
+                AND b.group_id LIKE '%$filter_group%'
+                ORDER BY a.name ASC");
+        $records = $query->result_array();
+
+        // 2. Hitung total data & total nominal untuk Baris Header "P"
+        $total_employees = count($records);
+        $total_net_income = 0;
+        foreach ($records as $rec) {
+            $total_net_income += (float) $rec['net_income'];
+        }
+
+        // 3. Set header HTTP browser agar otomatis download file .csv
+        $filename = "payrolls_mandiri_" . date("Ymd") . ".csv";
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename=' . $filename);
+
+        // 4. Buka output stream PHP untuk menulis data CSV
+        $output = fopen('php://output', 'w');
+
+        // Gunakan delimiter titik koma (;) agar saat dibuka di Excel Indonesia langsung rapi berkolom
+        $delimiter = ";"; 
+
+        // Fetch company bank account for Mandiri
+        $this->db->select('number');
+        $this->db->from('payroll_accounts');
+        $this->db->where('name', 'Bank Mandiri');
+        $this->db->where('deleted', 0);
+        $payroll_account = $this->db->get()->row();
+        if (empty($payroll_account)) {
+            $this->db->select('number');
+            $this->db->from('payroll_accounts');
+            $this->db->where('deleted', 0);
+            $this->db->limit(1);
+            $payroll_account = $this->db->get()->row();
+        }
+        $company_account = !empty($payroll_account) ? $payroll_account->number : '-';
+
+        // 5. Tulis Baris Pertama: Header Transaksi (Kode P)
+        // Kolom: P, Tanggal Transaksi, ID Perusahaan/Rekening, Total Karyawan, Total Gaji
+        $header_p = [
+            "P", 
+            date("Ymd", strtotime($filter_from)), 
+            $company_account, 
+            $total_employees, 
+            $total_net_income
+        ];
+        // Tambahkan kolom kosong ke kanan agar panjang baris seimbang (opsional)
+        for ($i = 0; $i < 18; $i++) {
+            $header_p[] = "";
+        }
+        fputcsv($output, $header_p, $delimiter);
+
+        // 6. Tulis Baris Berikutnya: Data Karyawan sesuai dengan kolom di gambar
+        foreach ($records as $record) {
+            if($record['gender']=='FEMALE'){
+                $salutation = "IBU";
+            }else{
+                $salutation = "BAPAK";
+            }
+            
+            $csv_row = [
+                $record['employee_nik'], // Kolom A (Kosong)
+                strtoupper($record['name']), // Nama Karyawan (Kapital)
+                "", // Kolom D (Kosong)
+                "", // Kolom E (Kosong)
+                "IDR", // Mata Uang
+                "", // Kolom G (Kosong)
+                $record['net_income'], // Nominal Gaji Bersih (Take Home Pay)
+                "PAYROLL " . strtoupper(date("M26", strtotime($filter_from))), // Contoh output: PAYROLL JUN26
+                "", // Kolom J (Kosong)
+                "IBU", // Keterangan di gambar
+                "", // Kolom L (Kosong)
+                $record['bank_name'], // Bank Tujuan
+                $record['bank_branch'], // Cabang Bank
+                "", // Kolom O (Kosong)
+                "", // Kolom P (Kosong)
+                "", // Kolom Q (Kosong)
+                "Y", // Flag Status Y
+                $record['email'] ?? "", // Email Karyawan untuk notifikasi e-slip bank
+                "", // Kolom T (Kosong)
+                "", // Kolom U (Kosong)
+                "", // Kolom V (Kosong)
+                "Y"  // Flag Penutup Y
+            ];
+            
+            fputcsv($output, $csv_row, $delimiter);
+        }
+
+        // 7. Tutup output stream
+        fclose($output);
+        exit;
+    }
 }
