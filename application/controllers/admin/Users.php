@@ -102,7 +102,34 @@ class Users extends CI_Controller
                     $postFinal = array_merge($post, ["avatar" => $avatar]);
                 }
 
+                if (!isset($postFinal['api_key']) || empty($postFinal['api_key'])) {
+                    $permitted_chars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                    $postFinal['api_key'] = substr(str_shuffle($permitted_chars), 0, 30);
+                }
+
                 $users = $this->crud->create('users', $postFinal);
+                
+                if ($users) {
+                    try {
+                        $apps_db = $this->load->database('apps', TRUE);
+                        if ($apps_db && $apps_db->conn_id) {
+                            $company = $apps_db->get_where('companies', ['number' => 'BPLASTIC'])->row();
+                            $link = $company ? $company->link : "http://bpi.astechno.net/hris-bpi/";
+                            $dataAppsUser = [
+                                "email" => $postFinal['email'],
+                                "password" => $postFinal['password'],
+                                "link" => $link,
+                                "status" => 0,
+                                "api_key" => $postFinal['api_key'],
+                                "created_date" => date('Y-m-d H:i:s'),
+                            ];
+                            $apps_db->insert("users", $dataAppsUser);
+                        }
+                    } catch (Exception $e) {
+                        log_message('error', 'Mobile database sync error in Admin Users: ' . $e->getMessage());
+                    }
+                }
+
                 $email = $this->emails->emailRegistration($post['email'], $post['name'], $post['username'], $post['password']);
                 echo $users;
             } else {
@@ -127,6 +154,52 @@ class Users extends CI_Controller
                 $postFinal = array_merge($post, ["avatar" => $avatar, "departement_id" => @$employee->departement_id]);
             }
             $users = $this->crud->update('users', ["id" => $id], $postFinal);
+
+            if ($users) {
+                try {
+                    $local_user = $this->crud->read('users', [], ["id" => $id]);
+                    if ($local_user) {
+                        if (empty($local_user->api_key)) {
+                            $permitted_chars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                            $new_api_key = substr(str_shuffle($permitted_chars), 0, 30);
+                            $this->db->update('users', ['api_key' => $new_api_key], ['id' => $id]);
+                            $local_user->api_key = $new_api_key;
+                        }
+
+                        $apps_db = $this->load->database('apps', TRUE);
+                        if ($apps_db && $apps_db->conn_id) {
+                            $apps_user = $apps_db->get_where('users', ['api_key' => $local_user->api_key])->row();
+
+                            $dataUpdateApps = [
+                                "email" => $post['email'],
+                                "updated_date" => date('Y-m-d H:i:s'),
+                            ];
+                            if (isset($post['password']) && $post['password'] !== "") {
+                                $dataUpdateApps['password'] = $post['password'];
+                            }
+
+                            if ($apps_user) {
+                                $apps_db->update("users", $dataUpdateApps, ["api_key" => $local_user->api_key]);
+                            } else {
+                                $company = $apps_db->get_where('companies', ['number' => 'BPLASTIC'])->row();
+                                $link = $company ? $company->link : "http://bpi.astechno.net/hris-bpi/";
+                                $dataInsertApps = [
+                                    "email" => $post['email'],
+                                    "password" => (isset($post['password']) && $post['password'] !== "") ? $post['password'] : $local_user->password,
+                                    "link" => $link,
+                                    "status" => 0,
+                                    "api_key" => $local_user->api_key,
+                                    "created_date" => date('Y-m-d H:i:s'),
+                                ];
+                                $apps_db->insert("users", $dataInsertApps);
+                            }
+                        }
+                    }
+                } catch (Exception $e) {
+                    log_message('error', 'Mobile database update sync error in Admin Users: ' . $e->getMessage());
+                }
+            }
+
             echo $users;
         } else {
             show_error("Cannot Process your request");
