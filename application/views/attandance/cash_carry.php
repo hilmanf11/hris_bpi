@@ -155,6 +155,12 @@
                         <option value="CORRECTION">CORRECTION</option>
                     </select>
                 </div>
+                <div class="fitem" id="u_download_template">
+                    <span style="width:30%; display:inline-block;"></span>
+                    <a href="javascript:;" id="btn_download_template" class="easyui-linkbutton" data-options="iconCls:'icon-save',disabled:true" onclick="download_template_insert()">
+                        <i class="fa fa-download"></i> Download Template
+                    </a>
+                </div>
             </div>
         </fieldset>
         <table id="dg2" class="easyui-datagrid" style="width:100%;" title="Employee Lists" toolbar="#toolbar2"></table>
@@ -209,6 +215,9 @@
         $("#u_idm").show();
         $("#u_attachment").show();
         $("#addrow").show();
+
+        // Disable download template button until department is selected
+        $('#btn_download_template').linkbutton('disable');
 
         $("#trans_date").datebox({
             onChange: function(trans_date){
@@ -372,6 +381,15 @@
             rownumbers: true,
             columns: [
                 [{
+                    field: 'employee_id',
+                    hidden: false,
+                    width: 100,
+                    halign: 'center',
+                    title: "Employee ID",
+                    editor: {
+                        type: 'textbox'
+                    }
+                }, {
                     field: 'employee_name',
                     width: 250,
                     halign: 'center',
@@ -409,15 +427,6 @@
                                 $(ed.target).textbox('setValue', rows.id);
                             }
                         }
-                    }
-                }, {
-                    field: 'employee_id',
-                    hidden: true,
-                    width: 100,
-                    halign: 'center',
-                    title: "ID",
-                    editor: {
-                        type: 'textbox'
                     }
                 }, {
                     field: 'start',
@@ -636,10 +645,22 @@
     //UPLOAD DATA
     function upload() {
         $('#dlg_upload').dialog('open');
+        $("#p_remarks").empty();
     }
 
     function download_excel() {
         window.location.assign('<?= base_url('template/tmp_cash_carry.xls') ?>');
+    }
+
+    function download_template_insert() {
+        var departement_id = $("#departement_id").combobox('getValue');
+        var trans_date = $("#trans_date").datebox('getValue');
+        var type = $("#type").combobox('getValue');
+        if (departement_id != "") {
+            window.location.assign('<?= base_url('attandance/cash_carry/downloadTemplate?departement_id=') ?>' + window.btoa(departement_id) + '&trans_date=' + trans_date + '&type=' + type);
+        } else {
+            toastr.error("Please Choose Departement first");
+        }
     }
 
     function filter() {
@@ -849,7 +870,6 @@
                                     $('#p_upload').progressbar('setValue', value);
                                     $('#p_start').html(number);
                                     $('#p_finish').html(total);
-
                                     $.ajax({
                                         type: "POST",
                                         async: true,
@@ -884,6 +904,7 @@
                                             }
 
                                             $("#p_remarks").append(title + "<br>");
+                                            
                                         },
                                         fail: function(jqXHR, textStatus) {
                                             if (textStatus == "error") {
@@ -903,6 +924,8 @@
                                             }
                                         }
                                     });
+                                }else{
+                                    $('#dg').datagrid('reload');
                                 }
                             }
                         }
@@ -1057,6 +1080,9 @@
                                 $("#request_code").textbox('setValue', result);
                             }
                         });
+
+                        // Enable Download Template button after department selected
+                        $('#btn_download_template').linkbutton('enable');
 
                         // $.ajax({
                         //     url: '<?= base_url('attandance/cash_carry/requestIdm') ?>',

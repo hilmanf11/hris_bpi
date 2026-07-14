@@ -417,6 +417,7 @@ class Cash_carry extends CI_Controller
         $this->db->from('employees');
         $this->db->where('status', 0);
         $this->db->where('departement_id', $departement_id);
+        $this->db->where('group_id !=', '20231005000001');
         $this->db->order_by('name', 'ASC');
         $records = $this->db->get()->result_array();
         
@@ -645,13 +646,13 @@ class Cash_carry extends CI_Controller
 
         // Request code baru memang dihitung per-row di uploadcreate(),
         // jadi di sini hanya kirim placeholder supaya tidak undefined variable.
-        for ($i = 3; $i <= $total_row; $i++) {
+        for ($i = 5; $i <= $total_row; $i++) {
             $datas[] = array(
                 'number' => $data->val($i, 2),
-                'trans_date' => $data->val($i, 3),
-                'start' => date("H:i", strtotime($data->val($i, 4))),
-                'end' => date("H:i", strtotime($data->val($i, 5))),
-                'duration_hour' => $data->val($i, 6),
+                'employee_name' => $data->val($i, 3),
+                'trans_date' => $data->val($i, 4),
+                'start' => date("H:i", strtotime($data->val($i, 5))),
+                'end' => date("H:i", strtotime($data->val($i, 6))),
                 'break' => $data->val($i, 7),
                 'type' => $data->val($i, 8),
                 'meal' => $data->val($i, 9),
@@ -659,7 +660,7 @@ class Cash_carry extends CI_Controller
                 'actual' => $data->val($i, 11),
                 'remarks' => $data->val($i, 12),
                 'request_code' => $templatefinal,
-                'idm_no' => $idm_no,
+                'idm_no' => '',
                 'attachment_idm' => $newName2
             );
         }
@@ -764,7 +765,7 @@ class Cash_carry extends CI_Controller
                             "duration_hour" => $duration['duration_hour'],
                             'remarks' => $data['remarks'],
                             'amount' =>  $ot_amount,
-                            'idm_no' => $idm_no,
+                            'idm_no' => $data['idm_no'],
                             'attachment_idm' => $data['attachment_idm']
                         );
 
@@ -773,7 +774,7 @@ class Cash_carry extends CI_Controller
                         echo json_encode(array("title" => "Good Job", "message" => "Data Upload Successfully", "theme" => "success"));
                     }
                 } else {
-                    echo json_encode(array("title" => "Not Found", "message" => $data['number'] . " Employee ID Not Found", "theme" => "error"));
+                    echo json_encode(array("title" => "Not Found", "message" => $data['number'] . " Employee ID Not Found " . $data['employee_name'], "theme" => "error"));
                 }
             }
         }
@@ -929,4 +930,85 @@ class Cash_carry extends CI_Controller
         $html .= '</table></body></html>';
         echo $html;
     }
+    public function downloadTemplate()
+    {
+        $departement_id = base64_decode($this->input->get('departement_id'));
+        $trans_date = $this->input->get('trans_date');
+        if (empty($trans_date)) {
+            $trans_date = date("Y-m-d");
+        }
+        $type = $this->input->get('type');
+        if (empty($type)) {
+            $type = 'REGULAR';
+        }
+
+        $this->db->select('a.number as employee_number, a.id as employee_id, a.name as employee_name');
+        $this->db->from('employees a');
+        $this->db->join('departements b', 'a.departement_id = b.id', 'left');
+        $this->db->where('a.status', 0);
+        $this->db->where('a.departement_id', $departement_id);
+        $this->db->where('a.group_id !=', '20231005000001');
+        $this->db->order_by('a.name', 'ASC');
+        $records = $this->db->get()->result_array();
+
+        // Get departement name for filename
+        $dept = $this->crud->read('departements', [], ['id' => $departement_id]);
+        $dept_name = !empty($dept) ? preg_replace('/[^A-Za-z0-9_]/', '_', $dept->name) : 'department';
+
+        $format = date("Ymd");
+        header("Content-type: application/vnd-ms-excel");
+        header("Content-Disposition: attachment; filename=template_cash_carry_{$dept_name}_{$format}.xls");
+        header("Pragma: no-cache");
+        header("Expires: 0");
+
+        $html = '<html><head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+        </head><body>
+        <table border="1">
+            <tr>
+                <td colspan="12" style="font-weight:bold; text-align:center; font-size:14px;">TEMPLATE UPLOAD CASH CARRY</td>
+            </tr>
+            <tr>
+                <td colspan="12" style="background-color:#D9E1F2;"><b>NOTE:</b> Kolom Employee ID, Trans Date, Start, End, Type wajib diisi. Break dalam satuan Menit. Meal diisi YES atau NO.</td>
+            </tr>
+            <tr>
+                <th>No</th>
+                <th>Employee ID</th>
+                <th>Employee Name</th>
+                <th>Trans Date<br>(YYYY-MM-DD)</th>
+                <th>Start<br>(HH:MM)</th>
+                <th>End<br>(HH:MM)</th>
+                <th>Break<br>(Minutes)</th>
+                <th>Type<br>(REGULAR/CORRECTION)</th>
+                <th>Meal<br>(YES/NO)</th>
+                <th>Plan</th>
+                <th>Actual</th>
+                <th>Remarks</th>
+            </tr>
+            
+            ';
+
+        $no = 1;
+        foreach ($records as $record) {
+            $html .= '<tr>
+                <td>' . $no . '</td>
+                <td style="mso-number-format:\@;">' . $record['employee_number'] . '</td>
+                <td style="mso-number-format:\@;">' . $record['employee_name'] . '</td>
+                <td style="mso-number-format:\@;">' . $trans_date . '</td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td>' . $type . '</td>
+                <td>NO</td>
+                <td>0</td>
+                <td>0</td>
+                <td></td>
+            </tr>';
+            $no++;
+        }
+
+        $html .= '</table></body></html>';
+        echo $html;
+    }
+
 }

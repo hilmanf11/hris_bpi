@@ -52,7 +52,8 @@
                     <option value="mutations">Mutations</option>
                     <!-- <option value="employee_requests">Employee Requests</option> -->
                     <!-- <option value="overtimes">Overtimes</option> -->
-                    <option value="cash_carries">Cash Carries</option>
+                    <option value="cash_carries">Overtime</option>
+                    <option value="cash_carry">Cash Carry</option>
                     <option value="permits">Permits</option>
                     <option value="change_days">Change Days</option>
                     <option value="setup_salaries">Setup Salary</option>

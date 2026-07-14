@@ -31,8 +31,9 @@
                     required:true
                 }
             }, formatter: function(value){
-                if (value == '0.5') return '30 Menit';
-                if (value == '1') return '1 Jam';
+                var v = parseFloat(value);
+                if (v == 0.5) return '30 Menit';
+                if (v == 1) return '1 Jam';
                 return value;
             }">Round Duration</th>
             <th rowspan="2" data-options="field:'weekday',width:100,halign:'center', align:'right', formatter:numberformat">Weekday</th>
@@ -280,6 +281,16 @@
             fit: true,
             pageList: [20, 50, 100, 500, 1000],
             pageSize: 20,
+            loadFilter: function(data) {
+                if (data.rows) {
+                    for (var i = 0; i < data.rows.length; i++) {
+                        var v = parseFloat(data.rows[i].round_duration);
+                        if (v == 0.5) data.rows[i].round_duration = '0.5';
+                        else if (v == 1) data.rows[i].round_duration = '1';
+                    }
+                }
+                return data;
+            },
             onEndEdit: function(index, row) {
                 var employee_id = row.employee_id;
                 var allowance_name = row.allowance_name;
