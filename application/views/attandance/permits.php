@@ -178,9 +178,10 @@
         var row = $('#dg').datagrid('getSelected');
         if (row) {
             $('#dlg_insert').dialog('open');
+            $('#frm_insert').form('load', row);
             $('#employee_id').combogrid('disable');
             $('#permit_date').datebox('disable');
-            $('#frm_insert').form('load', row);
+            
             url_save = '<?= base_url('attandance/permits/update') ?>?id=' + btoa(row.id);
         } else {
             toastr.warning("Please select one of the data in the table first!", "Information");
@@ -582,17 +583,16 @@
                     width: 200
                 }]
             ],
-            onSelect: function(value, employee) {
+            onChange: function(value, employee) {
                 $("#permit_type_id").combobox('clear');
                 $("#reason_id").combobox('clear');
-
                 $.ajax({
                     url: '<?= base_url('attandance/permits/readShifts') ?>',
                     type: 'post',
-                    data: 'employee_id=' + employee.id,
+                    data: 'employee_id=' + value,
                     success: function(row) {
                         var result = eval('(' + row + ')');
-                        if (row == "null") {
+                        if (result === null) {
                             $("#working_day").numberbox('clear');
                         } else {
                             $("#working_day").numberbox('setValue', result.days);

@@ -144,6 +144,8 @@ class Permits extends CI_Controller
             $result = array();
             //Select Query
             $this->db->select('a.*,
+                a.permit_date as date_from,
+                a.permit_date as date_to,
                 c.number as employee_number,
                 c.name as employee_name,
                 d.name as division_name,
