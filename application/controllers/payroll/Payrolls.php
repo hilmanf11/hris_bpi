@@ -1779,7 +1779,7 @@ class Payrolls extends CI_Controller
         // Kolom: P, Tanggal Transaksi, ID Perusahaan/Rekening, Total Karyawan, Total Gaji
         $header_p = [
             "P", 
-            date("Ymd", strtotime($filter_from)), 
+            date("Ymd", strtotime($filter_to)), 
             $company_account, 
             $total_employees, 
             $total_net_income
@@ -1806,7 +1806,7 @@ class Payrolls extends CI_Controller
                 "IDR", // Mata Uang
                 "", // Kolom G (Kosong)
                 $record['net_income'], // Nominal Gaji Bersih (Take Home Pay)
-                "PAYROLL " . strtoupper(date("M26", strtotime($filter_from))), // Contoh output: PAYROLL JUN26
+                "PAYROLL " . strtoupper(date("M26", strtotime($filter_to))), // Contoh output: PAYROLL JUN26
                 "", // Kolom J (Kosong)
                 "IBU", // Keterangan di gambar
                 "", // Kolom L (Kosong)

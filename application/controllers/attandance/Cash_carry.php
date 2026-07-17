@@ -116,6 +116,26 @@ class Cash_carry extends CI_Controller
         echo $date . sprintf("%04s", $requestcode);
     }
 
+    public function testing()
+    {
+        $employee_id = '20231006000056';
+        $trans_date = '2026-07-15';
+        $duration = 5.5;
+        $meal = 0;
+        // echo 'hasil = ';
+        $data_amount = $this->readOvertimePrice($employee_id, $trans_date, $duration, $meal);
+        print_r($data_amount);  
+    }
+
+    public function testing2()
+    {
+        $table = 'cash_carry';
+        $id = '20260716000001';
+        $approve = $this->crud->approvals($table, $id);
+
+        echo json_encode($approve);
+    }
+
     public function readOvertimePrice($employee_id, $trans_date, $duration, $meal)
     {
         $employee = $this->crud->read("employees", [], ["id" => $employee_id]);
@@ -126,8 +146,19 @@ class Cash_carry extends CI_Controller
         $this->db->where('a.employee_id', $employee_id);
         $shift_employee = $this->db->get()->row();
 
+        $data_employee = $this->crud->read("employees", [], ["id" => $employee_id]);
         $setup_cash_carry = $this->crud->read("setup_cash_carry", [], ["employee_id" => $employee_id]);
         $allowance_cash_carry = $this->crud->read("allowance_cash_carry", [], ["id" => @$setup_cash_carry->allowance_id]);
+        
+        if(empty($setup_cash_carry)){
+            echo  json_encode(array("title" => "Not Found", "message" => "($data_employee->number - $data_employee->name) Data Setup Cash Carry Not Found", "theme" => "danger"));
+            exit();
+        }
+
+        if(empty($allowance_cash_carry)){
+            echo  json_encode(array("title" => "Not Found", "message" => "($data_employee->number - $data_employee->name) Data Allowance Cash Carry Not Found", "theme" => "danger"));
+            exit();
+        }
 
         //ambil durasi berapa jam jika ada lemburan
         $hourTrans = strtotime($trans_date);
@@ -179,7 +210,11 @@ class Cash_carry extends CI_Controller
             }
         }
 
-        return $total;
+        return array(
+            'amount' => $total,
+            'amount_perhour' => $allowance_cash_carry->weekday,
+            'meal_amount' => $meal,
+        );
     }
 
     public function convertHour($trans_date, $start, $end, $employee_id, $break)
@@ -335,11 +370,6 @@ class Cash_carry extends CI_Controller
                 $this->db->where('a.employee_id', $record['employee_id']);
                 $shift_employee = $this->db->get()->row();
 
-                $this->db->select('trans_date');
-                $this->db->from('calendars');
-                $this->db->where('trans_date', $record['trans_date']);
-                $calendars = $this->db->get()->result_array();
-
                 $start = strtotime($record['trans_date']);
                 
                 if (@$attandance->time_in == "" || @$attandance->time_out == "") {
@@ -358,46 +388,13 @@ class Cash_carry extends CI_Controller
                     $hour = $att_hour;
                 }
 
-                //Validasi Uang makan
-                if ($record['meal'] == 0 or @$attandance->time_in == "") {
-                    $meal = 0;
-                } else {
-                    $meal = @$record['total_meal'];
-                }
 
-                if (@$shift_employee->days == "5") {
-                    if (date('w', $start) !== '0' && date('w', $start) !== '6') {
+                $meal = @$record['meal_amount'];
 
-                        //Kalo ada tanggal Merah
-                        if (count($calendars) > 0) {
-                            $total = ((@$record['total_holiday'] * $hour) + $meal);
-                        } else {
-                            $total = ((@$record['total_weekday'] * $hour) + $meal);
-                        }
-                    } else {
-                        if (date('w', $start) === '0') {
-                            $total = ((@$record['total_sunday'] * $hour) + $meal);
-                        } else {
-                            $total = ((@$record['total_saturday'] * $hour) + $meal);
-                        }
-                    }
-                } else {
-                    if (date('w', $start) !== '0') {
 
-                        //Kalo ada tanggal Merah
-                        if (count($calendars) > 0) {
-                            $total = ((@$record['total_holiday'] * $hour) + $meal);
-                        } else {
-                            $total = ((@$record['total_weekday'] * $hour) + $meal);
-                        }
-                    } else {
-                        if (date('w', $start) === '0') {
-                            $total = ((@$record['total_sunday'] * $hour) + $meal);
-                        } else {
-                            $total = ((@$record['total_saturday'] * $hour) + $meal);
-                        }
-                    }
-                }
+
+                $total = ((@$record['amount_perhour'] * $hour) + $meal);
+           
 
                 $amount = ["amount_actual" => $total, "duration_att" => number_format($att_hour, 2), "time_in" => @$attandance->time_in, "time_out" => @$attandance->time_out];
                 $datas[] = array_merge($record, $amount);
@@ -459,7 +456,7 @@ class Cash_carry extends CI_Controller
             $remarks = $post['remarks'];
             $duration = $this->convertHour($trans_date, $start, $end, $employee_id, $break);
             $duration['duration_hour'] = $duration['duration_hour'];
-            $ot_amount = $this->readOvertimePrice($employee_id, $trans_date, $duration['duration_hour'], $meal);
+            $data_amount = $this->readOvertimePrice($employee_id, $trans_date, $duration['duration_hour'], $meal);
 
             $post_final = array(
                 "trans_date" =>  $trans_date,
@@ -471,8 +468,10 @@ class Cash_carry extends CI_Controller
                 "type" =>  $type,
                 "duration" =>  $duration['duration'],
                 "duration_hour" => $duration['duration_hour'],
-                "amount" =>  $ot_amount,
+                "amount_perhour" => $data_amount['amount_perhour'],
+                "amount" =>  $data_amount['amount'],
                 "meal" =>  $meal,
+                "meal_amount" => $data_amount['meal_amount'],
                 "plan" =>  $plan,
                 "actual" =>  $actual,
                 "break" =>  $break,
@@ -515,7 +514,7 @@ class Cash_carry extends CI_Controller
             $remarks = $post['remarks'];
             $duration = $this->convertHour($trans_date, $start, $end, $employee_id, $break);
             $duration['duration_hour'] = $duration['duration_hour'];
-            $ot_amount = $this->readOvertimePrice($employee_id, $trans_date, $duration['duration_hour'], $meal);
+            $data_amount = $this->readOvertimePrice($employee_id, $trans_date, $duration['duration_hour'], $meal);
 
             $post_final = array(
                 "trans_date" =>  $trans_date,
@@ -527,8 +526,10 @@ class Cash_carry extends CI_Controller
                 "type" =>  $type,
                 "duration" =>  $duration['duration'],
                 "duration_hour" => $duration['duration_hour'],
-                "amount" =>  $ot_amount,
+                "amount_perhour" => $data_amount['amount_perhour'],
+                "amount" =>  $data_amount['amount'],
                 "meal" =>  $meal,
+                "meal_amount" => $data_amount['meal_amount'],
                 "plan" =>  $plan,
                 "actual" =>  $actual,
                 "break" =>  $break,
@@ -660,7 +661,7 @@ class Cash_carry extends CI_Controller
                 'actual' => $data->val($i, 11),
                 'remarks' => $data->val($i, 12),
                 'request_code' => $templatefinal,
-                'idm_no' => '',
+                'idm_no' => $total_row,
                 'attachment_idm' => $newName2
             );
         }
@@ -701,11 +702,15 @@ class Cash_carry extends CI_Controller
 
     public function uploadcreate()
     {
+      
         if ($this->input->post()) {
+            
             $data = $this->input->post('data');
             if ($data['trans_date'] == "") {
+                
                 echo json_encode(array("title" => "Format Date", "message" => $data['number'] . " Format Date is Null", "theme" => "error"));
             } else {
+                
                 $employee = $this->crud->read('employees', [], ["number" => $data['number']]);
 
                 if (!empty($employee)) {
@@ -742,13 +747,14 @@ class Cash_carry extends CI_Controller
 
                         $requestcode = (int) $records->code;
                         $requestcode++;
+                        
 
                         $template = "CC" . $departement_code . $date;
                         $templatefinal = $template . sprintf("%04s", $requestcode);
 
                         $duration = $this->convertHour($data['trans_date'], $data['start'], $data['end'], $employee->id, $break);
-                        $ot_amount = $this->readOvertimePrice($employee->id, $data['trans_date'], $duration['duration_hour'], $meal);
-
+                        $data_amount = $this->readOvertimePrice($employee->id, $data['trans_date'], $duration['duration_hour'], $meal);
+                        
                         $post_cash_carry = array(
                             'employee_id' => $employee->id,
                             'trans_date' => $data['trans_date'],
@@ -758,25 +764,33 @@ class Cash_carry extends CI_Controller
                             'end' => $data['end'],
                             'break' => $break,
                             'type' => $data['type'],
+                            'meal_amount' => $data_amount['meal_amount'],
                             'meal' => $meal,
                             'plan' => $data['plan'],
                             'actual' => $data['actual'],
                             "duration" =>  $duration['duration'],
                             "duration_hour" => $duration['duration_hour'],
                             'remarks' => $data['remarks'],
-                            'amount' =>  $ot_amount,
+                            'amount_perhour' => $data_amount['amount_perhour'],
+                            'amount' =>  $data_amount['amount'],
                             'idm_no' => $data['idm_no'],
                             'attachment_idm' => $data['attachment_idm']
                         );
 
                         $send = $this->crud->create('cash_carry', $post_cash_carry);
                         // echo $send;
-                        echo json_encode(array("title" => "Good Job", "message" => "Data Upload Successfully", "theme" => "success"));
+                        if($send){
+                            echo json_encode(array("title" => "Good Job", "message" => $data['number'] . " Data Upload Successfully", "theme" => "success"));
+                        } else {
+                            echo json_encode(array("title" => "Not Found", "message" => $data['number'] . " Data Upload Failed", "theme" => "error"));
+                        }
                     }
                 } else {
                     echo json_encode(array("title" => "Not Found", "message" => $data['number'] . " Employee ID Not Found " . $data['employee_name'], "theme" => "error"));
                 }
             }
+        } else {
+            echo json_encode(array("title" => "Data Not Found", "message" => "Data is Empty", "theme" => "error"));
         }
     }
 
@@ -1000,8 +1014,8 @@ class Cash_carry extends CI_Controller
                 <td></td>
                 <td>' . $type . '</td>
                 <td>NO</td>
-                <td>0</td>
-                <td>0</td>
+                <td></td>
+                <td></td>
                 <td></td>
             </tr>';
             $no++;

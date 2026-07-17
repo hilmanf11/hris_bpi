@@ -408,7 +408,7 @@ class Dashboard extends CI_Controller
         $nextday = date("Y-m-d", strtotime($today . ' + 3 days'));
         $this->db->select('name, image_profile, date_expired, position_id, departement_id');
         $this->db->from('employees');
-        $this->db->where("date_expired between '$today' and '$nextday'");
+        $this->db->where("(date_expired between '$today' and '$nextday' or date_expired <= '$today') and contract_id not in ('20221119000003','20231005000001','20231005000003') and status=0");
         $this->db->order_by('name', 'asc');
         $employees = $this->db->get()->result_object();
         if (count($employees) > 0) {

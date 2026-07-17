@@ -128,6 +128,7 @@ class Setup_cash_carry extends CI_Controller
             $post = $this->input->post();
             $employee_id = $post['employee_id'];
             $allowance_name = $post['allowance_name'];
+            $payment_type = isset($post['payment_type']) ? $post['payment_type'] : 'CASH';
 
             $setup_cash_carry = $this->crud->read("setup_cash_carry", [], ["employee_id" => $employee_id]);
             $allowance = $this->crud->read('allowance_cash_carry', [], ["name" => $allowance_name]);
@@ -137,6 +138,7 @@ class Setup_cash_carry extends CI_Controller
                     "employee_id" => $post['employee_id'],
                     "allowance_id" => @$allowance->id,
                     "round_duration" => isset($post['round_duration']) ? $post['round_duration'] : null,
+                    "payment_type" => $payment_type,
                 );
 
                 $send   = $this->crud->create('setup_cash_carry', $postFinal);
@@ -146,6 +148,7 @@ class Setup_cash_carry extends CI_Controller
                     "employee_id" => $employee_id,
                     "allowance_id" => @$allowance->id,
                     "round_duration" => isset($post['round_duration']) ? $post['round_duration'] : null,
+                    "payment_type" => $payment_type,
                 );
 
                 $send = $this->crud->update('setup_cash_carry', ["employee_id" => $post['employee_id']], $postFinal);
@@ -213,7 +216,9 @@ class Setup_cash_carry extends CI_Controller
         for ($i = 3; $i <= $total_row; $i++) {
             $datas[] = array(
                 'employee_number' => $data->val($i, 2),
-                'allowance_number' => $data->val($i, 3)
+                'allowance_number' => $data->val($i, 3),
+                'round_duration' => $data->val($i, 4),
+                'payment_type' => $data->val($i, 5)
             );
         }
 
@@ -272,6 +277,8 @@ class Setup_cash_carry extends CI_Controller
                         $post = array(
                             'employee_id' => $employees->id,
                             'allowance_id' => $allowances->id,
+                            'round_duration' => $data['round_duration'],
+                            'payment_type' => $data['payment_type'],
                         );
 
                         $send = $this->crud->create('setup_cash_carry', $post);

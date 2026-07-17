@@ -36,6 +36,19 @@
                 if (v == 1) return '1 Jam';
                 return value;
             }">Round Duration</th>
+            <th rowspan="2" data-options="field:'payment_type',width:120,halign:'center', editor:{
+                type:'combobox',
+                options:{
+                    valueField:'id',
+                    textField:'text',
+                    data: [
+                        {id: 'CASH', text: 'CASH'},
+                        {id: 'TRANSFER', text: 'TRANSFER'}
+                    ],
+                    panelHeight:'auto',
+                    required:true
+                }
+            }">Payment Type</th>
             <th rowspan="2" data-options="field:'weekday',width:100,halign:'center', align:'right', formatter:numberformat">Weekday</th>
             <th colspan="2" data-options="field:'',width:100,align:'center'">Weekend</th>
             <th rowspan="2" data-options="field:'holiday',width:100,halign:'center', align:'right', formatter:numberformat">Holiday</th>
@@ -121,6 +134,13 @@
                 <select style="width:60%;" name="round_duration" id="round_duration" class="easyui-combobox" required="true" data-options="panelHeight:'auto'">
                     <option value="0.5">30 Menit</option>
                     <option value="1">1 Jam</option>
+                </select>
+            </div>
+            <div class="fitem">
+                <span style="width:35%; display:inline-block;">Payment Type</span>
+                <select style="width:60%;" name="payment_type" id="payment_type" class="easyui-combobox" required="true" data-options="panelHeight:'auto'">
+                    <option value="CASH">CASH</option>
+                    <option value="TRANSFER">TRANSFER</option>
                 </select>
             </div>
             <div class="fitem">
@@ -295,11 +315,12 @@
                 var employee_id = row.employee_id;
                 var allowance_name = row.allowance_name;
                 var round_duration = row.round_duration;
+                var payment_type = row.payment_type;
 
                 $.ajax({
                     type: "post",
                     url: "<?= base_url('payroll/setup_cash_carry/createOrUpdate') ?>",
-                    data: "employee_id=" + employee_id + "&allowance_name=" + allowance_name + "&round_duration=" + round_duration,
+                    data: "employee_id=" + encodeURIComponent(employee_id) + "&allowance_name=" + encodeURIComponent(allowance_name) + "&round_duration=" + encodeURIComponent(round_duration) + "&payment_type=" + encodeURIComponent(payment_type),
                     dataType: "json",
                     success: function(json) {
                         if (json.theme == "success") {

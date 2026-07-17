@@ -124,12 +124,25 @@ class Cash_carry extends CI_Controller
                     $this->db->where('a.employee_id', $record['employee_id']);
                     $shift_employee = $this->db->get()->row();
 
+                    if($filter_division != ''){
+                        $division_data = $record['division_name'];
+                    }else{
+                        $division_data = 'ALL';
+                    }
+
+                    if($filter_departement != ''){
+                        $departement_data = $record['departement_name'];
+                    }else{
+                        $departement_data = 'ALL';
+                    }
+
                     $this->db->select('trans_date');
                     $this->db->from('calendars');
                     $this->db->where('trans_date', $record['trans_date']);
                     $calendars = $this->db->get()->result_array();
 
                     $start = strtotime($record['trans_date']);
+                    
 
                     if (empty($record['time_in']) || empty($record['time_out'])) {
                         $att_hour = 0;
@@ -165,39 +178,35 @@ class Cash_carry extends CI_Controller
                     $hour    = ($att_hour > $cc_hour) ? $cc_hour : $att_hour;
                     $meal    = ($record['meal'] == 0) ? 0 : @$record['total_meal'];
 
-                    // Kategori Lembur
-                    $ot_type = 'weekday'; // Default: Hari Kerja
+                    // ---------------------------------------------------------
+                    // LOGIKA PEMISAHAN KATEGORI LEMBUR (Termasuk Minggu & Libur)
+                    // ---------------------------------------------------------
+                    $is_holiday_calendar = (count($calendars) > 0);
+                    $day_of_week         = date('w', $start); // 0 = Minggu, 6 = Sabtu
 
-                    if (@$shift_employee->days == "5") {
-                        if (date('w', $start) !== '0' && date('w', $start) !== '6') {
-                            if (count($calendars) > 0) {
-                                $ot_type = 'holiday';
-                                $rate = @$record['total_holiday'];
-                            } else {
-                                $ot_type = 'weekday';
-                                $rate = @$record['total_weekday'];
-                            }
-                        } else {
-                            if (date('w', $start) === '0') {
-                                $ot_type = 'holiday';
-                                $rate = @$record['total_sunday'];
-                            } else {
-                                $ot_type = 'saturday';
-                                $rate = @$record['total_saturday'];
-                            }
-                        }
+                    if ($is_holiday_calendar) {
+                        // Jika ada di tabel kalender libur nasional
+                        $ot_type = 'holiday';
+                        $rate    = @$record['total_holiday'];
                     } else {
-                        if (date('w', $start) !== '0') {
-                            if (count($calendars) > 0) {
-                                $ot_type = 'holiday';
-                                $rate = @$record['total_holiday'];
-                            } else {
-                                $ot_type = 'weekday';
-                                $rate = @$record['total_weekday'];
-                            }
+                        // Jika bukan libur nasional, cek hari
+                        if ($day_of_week === '0') {
+                            // Hari Minggu
+                            $ot_type = 'sunday';
+                            $rate    = @$record['total_sunday'];
+                        } else if ($day_of_week === '6') {
+                            // Hari Sabtu
+                            // if (@$shift_employee->days == "5") {
+                                $ot_type = 'saturday';
+                                $rate    = @$record['total_saturday'];
+                            // } else {
+                                // $ot_type = 'weekday';
+                                // $rate    = @$record['total_weekday'];
+                            // }
                         } else {
-                            $ot_type = 'holiday';
-                            $rate = @$record['total_sunday'];
+                            // Hari Kerja (Senin - Jumat)
+                            $ot_type = 'weekday';
+                            $rate    = @$record['total_weekday'];
                         }
                     }
 
@@ -217,6 +226,8 @@ class Cash_carry extends CI_Controller
                             'weekday_amount'       => 0,
                             'saturday_hour'        => 0,
                             'saturday_amount'      => 0,
+                            'sunday_hour'          => 0, // Ditambahkan
+                            'sunday_amount'        => 0, // Ditambahkan
                             'holiday_hour'         => 0,
                             'holiday_amount'       => 0,
                             'total_netto_hour'     => 0,
@@ -231,9 +242,12 @@ class Cash_carry extends CI_Controller
                     } else if ($ot_type == 'saturday') {
                         $grouped_data[$emp_id]['saturday_hour']   += $hour;
                         $grouped_data[$emp_id]['saturday_amount'] += $amount;
+                    } else if ($ot_type == 'sunday') {
+                        $grouped_data[$emp_id]['sunday_hour']     += $hour;
+                        $grouped_data[$emp_id]['sunday_amount']   += $amount;
                     } else if ($ot_type == 'holiday') {
-                        $grouped_data[$emp_id]['holiday_hour']   += $hour;
-                        $grouped_data[$emp_id]['holiday_amount'] += $amount;
+                        $grouped_data[$emp_id]['holiday_hour']    += $hour;
+                        $grouped_data[$emp_id]['holiday_amount']  += $amount;
                     }
 
                     $grouped_data[$emp_id]['total_netto_hour'] += $hour;
@@ -241,13 +255,14 @@ class Cash_carry extends CI_Controller
                 }
 
                 // =========================================================================
-                // PROSES 2: RENDER HTML SESUAI TABLE LAYOUT GAMBAR
+                // PROSES 2: RENDER HTML SESUAI TABLE LAYOUT BARU
                 // =========================================================================
                 $html = '<html><head><title>CASH CARRY REPORT</title></head>
                 <style>
                     body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin: 15px; }
                     .header-table { width: 100%; margin-bottom: 10px; border-collapse: collapse; }
                     .report-title { text-align: center; font-size: 16px; font-weight: bold; margin: 15px 0; }
+                    .info-table { width: 95%; margin: 0 auto 10px auto; font-size: 12px; border-collapse: collapse; }
                     
                     #reportTable { border-collapse: collapse; width: 100%; font-size: 11px; }
                     #reportTable th, #reportTable td { border: 1px solid #000; padding: 4px 6px; }
@@ -281,6 +296,24 @@ class Cash_carry extends CI_Controller
 
                     <div class="report-title">CASH CARRY REPORT</div>
 
+                    <table class="info-table">
+                        <tr>
+                            <td width="90" style="border:none;">Date</td>
+                            <td width="10" style="border:none;">:</td>
+                            <td style="border:none;">' . $filter_from . ' &nbsp;to&nbsp; ' . $filter_to . '</td>
+                        </tr>
+                        <tr>
+                            <td style="border:none;">Plant</td>
+                            <td style="border:none;">:</td>
+                            <td style="border:none;">'.$division_data.'</td>
+                        </tr>
+                        <tr>
+                            <td style="border:none;">Department</td>
+                            <td style="border:none;">:</td>
+                            <td style="border:none;">'.$departement_data.'</td>
+                        </tr>
+                    </table>
+
                     <table id="reportTable">
                         <thead>
                             <tr>
@@ -291,18 +324,21 @@ class Cash_carry extends CI_Controller
                                 <th rowspan="2" width="110">Department</th>
                                 <th colspan="2">OT Hari Kerja</th>
                                 <th colspan="2">OT Hari Sabtu</th>
-                                <th colspan="2">OT Hari Minggu/Libur Nasional</th>
+                                <th colspan="2">OT Hari Minggu</th>
+                                <th colspan="2">OT Libur Nasional</th>
                                 <th rowspan="2" width="70">OT Netto</th>
                                 <th rowspan="2" width="90">Total Dibayar</th>
                                 <th rowspan="2" width="80">Di Terima</th>
                             </tr>
                             <tr>
-                                <th width="70">Durasi (Jam)</th>
-                                <th width="80">Nominal</th>
-                                <th width="70">Durasi (Jam)</th>
-                                <th width="80">Nominal</th>
-                                <th width="70">Durasi (Jam)</th>
-                                <th width="80">Nominal</th>
+                                <th width="60">Durasi (Jam)</th>
+                                <th width="75">Nominal</th>
+                                <th width="60">Durasi (Jam)</th>
+                                <th width="75">Nominal</th>
+                                <th width="60">Durasi (Jam)</th>
+                                <th width="75">Nominal</th>
+                                <th width="60">Durasi (Jam)</th>
+                                <th width="75">Nominal</th>
                             </tr>
                         </thead>
                         <tbody>';
@@ -312,6 +348,8 @@ class Cash_carry extends CI_Controller
                 $tot_weekday_amt     = 0;
                 $tot_saturday_hr     = 0;
                 $tot_saturday_amt    = 0;
+                $tot_sunday_hr       = 0;
+                $tot_sunday_amt      = 0;
                 $tot_holiday_hr      = 0;
                 $tot_holiday_amt     = 0;
                 $tot_netto_hr        = 0;
@@ -328,6 +366,8 @@ class Cash_carry extends CI_Controller
                                 <td style="text-align:right;">' . number_format($row['weekday_amount'], 0, ',', '.') . '</td>
                                 <td style="text-align:center;">' . number_format($row['saturday_hour'], 2) . '</td>
                                 <td style="text-align:right;">' . number_format($row['saturday_amount'], 0, ',', '.') . '</td>
+                                <td style="text-align:center;">' . number_format($row['sunday_hour'], 2) . '</td>
+                                <td style="text-align:right;">' . number_format($row['sunday_amount'], 0, ',', '.') . '</td>
                                 <td style="text-align:center;">' . number_format($row['holiday_hour'], 2) . '</td>
                                 <td style="text-align:right;">' . number_format($row['holiday_amount'], 0, ',', '.') . '</td>
                                 <td style="text-align:center;">' . number_format($row['total_netto_hour'], 2) . '</td>
@@ -340,6 +380,8 @@ class Cash_carry extends CI_Controller
                     $tot_weekday_amt     += $row['weekday_amount'];
                     $tot_saturday_hr     += $row['saturday_hour'];
                     $tot_saturday_amt    += $row['saturday_amount'];
+                    $tot_sunday_hr       += $row['sunday_hour'];
+                    $tot_sunday_amt      += $row['sunday_amount'];
                     $tot_holiday_hr      += $row['holiday_hour'];
                     $tot_holiday_amt     += $row['holiday_amount'];
                     $tot_netto_hr        += $row['total_netto_hour'];
@@ -354,6 +396,8 @@ class Cash_carry extends CI_Controller
                             <td style="text-align:right;">' . number_format($tot_weekday_amt, 0, ',', '.') . '</td>
                             <td style="text-align:center;">' . number_format($tot_saturday_hr, 2) . '</td>
                             <td style="text-align:right;">' . number_format($tot_saturday_amt, 0, ',', '.') . '</td>
+                            <td style="text-align:center;">' . number_format($tot_sunday_hr, 2) . '</td>
+                            <td style="text-align:right;">' . number_format($tot_sunday_amt, 0, ',', '.') . '</td>
                             <td style="text-align:center;">' . number_format($tot_holiday_hr, 2) . '</td>
                             <td style="text-align:right;">' . number_format($tot_holiday_amt, 0, ',', '.') . '</td>
                             <td style="text-align:center;">' . number_format($tot_netto_hr, 2) . '</td>

@@ -102,7 +102,8 @@ class Attandances extends CI_Controller
         if ($this->input->post()) {
             if ($this->form_validation->run() == TRUE) {
                 $post   = $this->input->post();
-                $attandance = $this->crud->read("attandances", [], ["number" => $post['number'], "date_in" => $post['date_in'], "attandance_type" => "Input HRIS"]);
+                $post['attandance_type'] = "Input HRIS";
+                $attandance = $this->crud->read("attandances", [], ["number" => $post['number'], "date_in" => $post['date_in']]);
                 if ($attandance) {
                     echo json_encode(array("title" => "Available", "message" => "The attandance for this employee and date in has been created", "theme" => "error"));
                 } else {
@@ -330,13 +331,11 @@ class Attandances extends CI_Controller
                             $date_out = $date_in;
                         }
                     } else {
-                        $diff = $time_begin - $time_end;
-                        $hour = floor($diff / (60 * 60));
-
-                        if ($hour < 0) {
-                            $date_out = $date_in;
-                        } else {
+                        // Jika jam pulang shift lebih kecil dari jam masuk (artinya lintas hari, misal masuk 22:00 pulang 06:00)
+                        if (strtotime($shift->end) < strtotime($shift->start)) {
                             $date_out = $tomorrow;
+                        } else {
+                            $date_out = $date_in; // Untuk shift normal 08:00 - 17:00, date_out adalah hari yang sama
                         }
                     }
 
