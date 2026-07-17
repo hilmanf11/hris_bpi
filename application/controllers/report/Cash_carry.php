@@ -46,6 +46,10 @@ class Cash_carry extends CI_Controller
             $filter_employee = $this->input->get('filter_employee');
             $filter_group = $this->input->get('filter_group');
             $filter_bank = $this->input->get('filter_bank');
+
+            
+
+            
             $username = $this->session->username;
 
             // Query Data
@@ -65,6 +69,7 @@ class Cash_carry extends CI_Controller
                 g.date_in as att_date_in,
                 g.date_out as att_date_out,
                 j.round_duration,
+                j.payment_type,
                 c.name as departement_name,
                 d.name as departement_sub_name,
                 h.name as division_name,
@@ -96,7 +101,15 @@ class Cash_carry extends CI_Controller
             $this->db->like('b.departement_id', $filter_departement);
             $this->db->like('b.departement_sub_id', $filter_departement_sub);
             $this->db->like('b.group_id', $filter_group);
-            $this->db->like('b.bank_name', $filter_bank);
+            
+            if($filter_bank!=''){
+                if($filter_bank=='-'){
+                    $this->db->where('j.payment_type', 'CASH');
+                }else{
+                    $this->db->where('j.payment_type', 'TRANSFER');
+                    $this->db->like('b.bank_name', $filter_bank);
+                }
+            }
             $this->db->order_by('h.name', 'ASC');
             $this->db->order_by('c.name', 'ASC');
             $this->db->order_by('b.name', 'ASC');
@@ -276,6 +289,7 @@ class Cash_carry extends CI_Controller
                     .approval-table th { font-weight: bold; padding: 5px; }
                     .approval-space { height: 80px; }
                     .approval-name { height: 25px; }
+                    .approval-position { font-weight: bold;height: 25px; }
                 </style>
                 <body>
                     <table class="header-table">
@@ -311,6 +325,11 @@ class Cash_carry extends CI_Controller
                             <td style="border:none;">Department</td>
                             <td style="border:none;">:</td>
                             <td style="border:none;">'.$departement_data.'</td>
+                        </tr>
+                        <tr>
+                            <td style="border:none;">Golongan</td>
+                            <td style="border:none;">:</td>
+                            <td style="border:none;">'.$group_data.'</td>
                         </tr>
                     </table>
 
@@ -411,14 +430,19 @@ class Cash_carry extends CI_Controller
                 $html .= '<div class="approval-container">
                         <table class="approval-table">
                             <tr>
-                                <th width="33%">Prepared</th>
-                                <th width="33%">Checked</th>
-                                <th width="34%">Approved</th>
+                                <th width="33%">Approved</th>
+                                <th width="33%">Approved</th>
+                                <th width="34%">Prepared</th>
                             </tr>
                             <tr>
                                 <td class="approval-space"></td>
                                 <td class="approval-space"></td>
                                 <td class="approval-space"></td>
+                            </tr>
+                            <tr>
+                                <td class="approval-position"></td>
+                                <td class="approval-position">GENERAL MANAGER</td>
+                                <td class="approval-position">HRD</td>
                             </tr>
                             <tr>
                                 <td class="approval-name"></td>
@@ -426,6 +450,7 @@ class Cash_carry extends CI_Controller
                                 <td class="approval-name"></td>
                             </tr>
                         </table>
+                        <div class="clearfix"></div>
                     </div>';
 
                 $html .= '</body></html>';

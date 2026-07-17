@@ -53,8 +53,8 @@
 
 <iframe id="printout_recap" src="" style="width: 100%; height:500px; border: 0;" hidden></iframe>
 
-<div class="easyui-panel" title="Print Preview" style="width:100%; padding:10px; min-height: 600px;" data-options="fit:true">
-    <iframe id="printout" src="" style="width: 100%; height: 80vh; border: 0;"></iframe>
+<div class="easyui-panel" title="Print Preview" style="width:100%; padding:10px;" data-options="fit:true">
+    <iframe id="printout" src="" style="width: 100%; height: 50%; border: 0;"></iframe>
 </div>
 
 <script>

@@ -173,6 +173,7 @@ class Attandances extends CI_Controller
         error_reporting(0);
 
         if ($this->input->post('file_type') == "text") {
+            // ... (Bagian teks sudah aman karena menggunakan attandance_temp dan di-order_by)
             $target = basename($_FILES['file_upload']['name']);
             move_uploaded_file($_FILES['file_upload']['tmp_name'], $target);
             $open = fopen($target, 'r');
@@ -204,6 +205,7 @@ class Attandances extends CI_Controller
             echo json_encode($datas);
             unlink($_FILES['file_upload']['name']);
             $this->db->truncate('attandance_temp');
+
         } elseif ($this->input->post('file_type') == "excel") {
             require_once 'assets/vendors/excel_reader2.php';
             $target = basename($_FILES['file_upload']['name']);
@@ -213,37 +215,46 @@ class Attandances extends CI_Controller
             $data = new Spreadsheet_Excel_Reader($file, false);
             $total_row = $data->rowcount($sheet_index = 0);
 
+            // PERBAIKAN: Aktifkan kembali penampung temporary agar data terurut berdasarkan Waktu & PIN
             for ($i = 2; $i <= $total_row; $i++) {
                 $datein = explode(";", $data->val($i, 4));
-                $datas[] = array(
+                $clean_date = $this->formatTanggal($datein[0]); // Format ke Y-m-d
+                $clean_time = trim($datein[1]);                 // Format H:i:s
+                
+                // Masukkan lokasi/status (1 atau 2) ke fungsi create_temp jika fungsi tersebut mendukung, 
+                // atau buat temporary array lalu urutkan. 
+                // Di sini kita gunakan penampung array langsung, lalu kita urutkan secara manual via PHP:
+                $sort_helper[] = array(
                     'lokasi' => $data->val($i, 5),
                     'number' => trim($data->val($i, 6)),
-                    'date_in' => $datein[0] . " " . $datein[1],
-                    'date_out' => $datein[0] . " " . $datein[1]
+                    'datetime' => $clean_date . " " . $clean_time,
+                    'date_in' => $datein[0] . " " . $datein[1]
                 );
-                
-                //$this->create_temp(trim($data->val($i, 6)), trim(date('Y-m-d', strtotime($data->val($i, 4)))), trim(date('H:i:s', strtotime($data->val($i, 4)))));
             }
 
-            // $this->db->select('*');
-            // $this->db->from('attandance_temp');
-            // $this->db->order_by('number', 'asc');
-            // $this->db->order_by('attandance_date', 'asc');
-            // $attandance = $this->db->get()->result_object();
+            // Urutkan array berdasarkan PIN (number) dan Waktu (datetime) secara Ascending (A-Z / Lama ke Baru)
+            // Ini krusial agar data IN diproses lebih dulu daripada data OUT
+            usort($sort_helper, function($a, $b) {
+                if ($a['number'] == $b['number']) {
+                    return strcmp($a['datetime'], $b['datetime']);
+                }
+                return strcmp($a['number'], $b['number']);
+            });
 
-            // foreach ($attandance as $data) {
-            //     $datas[] = array(
-            //         'number' => $data->number,
-            //         'date_in' => date('d/m/Y H:i:s', strtotime($data->attandance_date)),
-            //         'date_out' => date('d/m/Y H:i:s', strtotime($data->attandance_date))
-            //     );
-            // }
+            // Pindahkan hasil urutan ke variabel $datas yang siap di-loop oleh Ajax
+            foreach ($sort_helper as $row) {
+                $datas[] = array(
+                    'lokasi'   => $row['lokasi'],
+                    'number'   => $row['number'],
+                    'date_in'  => $row['date_in'], 
+                    'date_out' => $row['date_in'] // Dikirim sama tidak apa-apa, karena nanti di uploadcreate() akan diolah ulang tanggal aslinya
+                );
+            }
 
             $datas['total'] = count($datas);
             echo json_encode($datas);
 
             unlink($_FILES['file_upload']['name']);
-            //$this->db->truncate('attandance_temp');
         } else {
             echo json_encode("Format File Error");
         }
@@ -283,26 +294,30 @@ class Attandances extends CI_Controller
         if ($this->input->post()) {
             $data = $this->input->post('data');
             $explode = explode(" ", $data['date_in']);
-            $date_in = $this->formatTanggal($explode[0]);
-            $time_in = $explode[1];
+            $date_in = $this->formatTanggal($explode[0]); // Ini adalah tanggal aktual dari mesin log
+            $time_in = $explode[1];                      // Ini adalah jam aktual dari mesin log
 
-            //Employee
+            // 1. Ambil Data Employee
             $this->db->select('*');
             $this->db->from('employees');
             $this->db->where('number', $data['number']);
             $employee = $this->db->get()->row();
 
-            //Jika Terdaftar di master employee
             if (!empty($employee->number)) {
+                
+                // ==========================================
+                // KONDISI 1: JIKA LOG ADALAH CHECK IN (1)
+                // ==========================================
                 if ($data['lokasi'] == 1) {
 
-                    //Attandance
+                    // Cari apakah sudah ada data Check In untuk hari ini
                     $this->db->select('*');
                     $this->db->from('attandances');
                     $this->db->where('number', $data['number']);
                     $this->db->where("date_in = '$date_in'");
                     $attandance_in = $this->db->get()->row();
 
+                    // Ambil master shift employee
                     $tolerance_hour_min = date("H:i:s", strtotime('-2 Hour', strtotime(@$time_in)));
                     $tolerance_hour_plus = date("H:i:s", strtotime('+2 Hour', strtotime(@$time_in)));
                     $this->db->select("d.start, d.end, d.days, d.working, d.tolerance, c.name, d.name as shift_name");
@@ -310,39 +325,20 @@ class Attandances extends CI_Controller
                     $this->db->join('shifts c', 'c.id = b.shift_id');
                     $this->db->join('shift_details d', 'd.shift_id = c.id');
                     $this->db->where('b.employee_id', $employee->id);
-                    $this->db->where("TIME(d.start) >=  TIME('$tolerance_hour_min') && TIME(d.start) <= TIME('$tolerance_hour_plus')");
+                    $this->db->where("TIME(d.start) >= TIME('$tolerance_hour_min') && TIME(d.start) <= TIME('$tolerance_hour_plus')");
                     $shift = $this->db->get()->row();
 
-                    $time_begin = strtotime($date_in . " " . $time_in);
-                    $time_end = strtotime($date_in . " " . @$shift->end);
                     $tomorrow = date("Y-m-d", strtotime('+1 days', strtotime($date_in)));
 
-                    $diff = $time_begin - $time_end;
-                    $hour = floor($diff / (60 * 60));
-
-                    //die($date_in . " " . $tolerance_hour_plus . " - " . $date_in . " " . @$shift->end . " | " . $hour);
-                    if (empty($time_end)) {
+                    if (empty($shift->end)) {
                         $hour_in = date("H:i:s", strtotime($time_in));
-
-                        // Jika jam masuk lebih dari jam 15:00:00 (Masuk Shift Sore/Malam)
-                        if ($hour_in > "15:00:00") {
-                            $date_out = $tomorrow;
-                        } else {
-                            $date_out = $date_in;
-                        }
+                        $date_out = ($hour_in > "15:00:00") ? $tomorrow : $date_in;
                     } else {
-                        // Jika jam pulang shift lebih kecil dari jam masuk (artinya lintas hari, misal masuk 22:00 pulang 06:00)
-                        if (strtotime($shift->end) < strtotime($shift->start)) {
-                            $date_out = $tomorrow;
-                        } else {
-                            $date_out = $date_in; // Untuk shift normal 08:00 - 17:00, date_out adalah hari yang sama
-                        }
+                        $date_out = (strtotime($shift->end) < strtotime($shift->start)) ? $tomorrow : $date_in;
                     }
 
                     if (!empty($attandance_in->number)) {
                         $data_attandance = array(
-                            'number' => $data['number'],
-                            'date_in' => $date_in,
                             'time_in' => $time_in,
                             'shift_start' => @$shift->start,
                             'shift_name' => @$shift->name,
@@ -350,36 +346,31 @@ class Attandances extends CI_Controller
                             'shift_days' => @$shift->days,
                             'attandance_type' => 'Upload HRIS'
                         );
-
                         $this->crud->update('attandances', ["id" => $attandance_in->id], $data_attandance, "no_log");
-                        echo json_encode(array("title" => "Updated", "message" => $employee->name . " | " . $date_in . " " . $time_in . " Update data Check In", "theme" => "success"));
+                        echo json_encode(array("title" => "Updated", "message" => $employee->name . " | " . $date_in . " " . $time_in . " Update Check In", "theme" => "success"));
                     } else {
                         $data_attandance = array(
                             'number' => $data['number'],
                             'date_in' => $date_in,
                             'time_in' => $time_in,
-                            'date_out' => $date_out,
+                            'date_out' => $date_out, // Prediksi tanggal out awal
                             'shift_start' => @$shift->start,
                             'shift_name' => @$shift->name,
                             'shift_detail' => @$shift->shift_name,
                             'shift_days' => @$shift->days,
                             'attandance_type' => 'Upload HRIS'
-                            // 'time_out' => @$shift->end,
                         );
                         $this->crud->create('attandances', $data_attandance, "no_log");
-                        echo json_encode(array("title" => "Created", "message" => $employee->name . " | " . $date_in . " " . $time_in . " Create data Check In", "theme" => "success"));
+                        echo json_encode(array("title" => "Created", "message" => $employee->name . " | " . $date_in . " " . $time_in . " Create Check In", "theme" => "success"));
                     }
-                    //echo json_encode(array("title" => "Warning", "message" => $data['number'] . " Next", "theme" => "error"));
+
+                // ==========================================
+                // KONDISI 2: JIKA LOG ADALAH CHECK OUT (2)
+                // ==========================================
                 } else {
                     $yesterday = date("Y-m-d", strtotime('-1 days', strtotime($date_in)));
 
-                    //Attandance
-                    $this->db->select('*');
-                    $this->db->from('attandances');
-                    $this->db->where('number', $data['number']);
-                    $this->db->where("date_out = '$date_in'");
-                    $attandance_out = $this->db->get()->row();
-
+                    // Ambil shift untuk mendeteksi apakah karyawan ini terdaftar di shift malam (lintas hari)
                     $tolerance_hour_min = date("H:i:s", strtotime('-2 Hour', strtotime(@$time_in)));
                     $tolerance_hour_plus = date("H:i:s", strtotime('+2 Hour', strtotime(@$time_in)));
                     $this->db->select("d.start, d.end, d.days, d.working, d.tolerance, c.name, d.name as shift_name");
@@ -387,41 +378,46 @@ class Attandances extends CI_Controller
                     $this->db->join('shifts c', 'c.id = b.shift_id');
                     $this->db->join('shift_details d', 'd.shift_id = c.id');
                     $this->db->where('b.employee_id', $employee->id);
-                    $this->db->where("TIME(d.end) >=  TIME('$tolerance_hour_min') && TIME(d.end) <= TIME('$tolerance_hour_plus')");
+                    $this->db->where("TIME(d.end) >= TIME('$tolerance_hour_min') && TIME(d.end) <= TIME('$tolerance_hour_plus')");
                     $shift = $this->db->get()->row();
 
-                    $time_begin = strtotime($date_in . " " . @$shift->start);
-                    $time_end = strtotime($date_in . " " . $time_in);
-
-                    $diff = $time_begin - $time_end;
-                    $hour = floor($diff / (60 * 60));
-
-                    // die($date_in . " " . @$shift->start . " - " . $date_in . " " . @$time_in . " | " . $hour);
-                    // die($hour);
-                    if ($hour < 0) {
-                        $date_out = $date_in;
+                    // Logika Penentuan Tanggal Masuk Seharusnya
+                    // Jika jam pulang shift lebih kecil dari jam masuk (artinya lintas hari, misal masuk 22:00 pulang 06:00)
+                    if (!empty($shift) && (strtotime($shift->end) < strtotime($shift->start))) {
+                        // Jika log out jam 00:00 - 09:00 pagi, kemungkinan besar ini shift malam dari hari kemarin
+                        $tanggal_masuk_seharusnya = ($time_in < "12:00:00") ? $yesterday : $date_in;
                     } else {
-                        $date_out = $yesterday;
+                        // Shift normal (pulang di hari yang sama)
+                        // Atau jika jam pulang melewati tengah malam tapi di luar shift terjadwal, cek jam pulangnya
+                        $tanggal_masuk_seharusnya = ($time_in < "08:00:00") ? $yesterday : $date_in;
                     }
 
-                    if (!empty($attandance_out->number)) {
+                    // KUNCI PERBAIKAN: Cari data absensi berdasarkan tanggal masuknya (date_in)
+                    $this->db->select('*');
+                    $this->db->from('attandances');
+                    $this->db->where('number', $data['number']);
+                    $this->db->where('date_in', $tanggal_masuk_seharusnya); 
+                    $attandance_match = $this->db->get()->row();
+
+                    if (!empty($attandance_match->number)) {
+                        // JIKA DATA IN NYA KEMARIN/HARI INI ADA, UPDATE TANGGAL & JAM OUT-NYA
                         $data_attandance = array(
-                            'number' => $data['number'],
-                            'date_out' => $date_in,
-                            'time_out' => $time_in,
+                            'date_out' => $date_in, // Tanggal out aktual dari mesin (Hari ini/esok)
+                            'time_out' => $time_in, // Jam out aktual dari mesin
                             'shift_start' => @$shift->start,
                             'shift_name' => @$shift->name,
                             'shift_detail' => @$shift->shift_name,
                             'shift_days' => @$shift->days,
                             'attandance_type' => 'Upload HRIS'
                         );
-                        $this->crud->update('attandances', ["id" => $attandance_out->id], $data_attandance, "no_log");
-                        echo json_encode(array("title" => "Updated", "message" => $employee->name . " | " . $date_in . " " . $time_in . " Update data Check Out", "theme" => "success"));
+                        $this->crud->update('attandances', ["id" => $attandance_match->id], $data_attandance, "no_log");
+                        echo json_encode(array("title" => "Updated", "message" => $employee->name . " | In: " . $tanggal_masuk_seharusnya . " - Out: " . $date_in . " " . $time_in . " Update Check Out", "theme" => "success"));
                     } else {
+                        // JIKA KARYAWAN LUPA ABSEN IN (Data IN tidak ditemukan), BUAT BARIS BARU
                         $data_attandance = array(
                             'number' => $data['number'],
-                            'date_in' => $date_out,
-                            // 'time_in' => @$shift->start,
+                            'date_in' => $tanggal_masuk_seharusnya,
+                            'time_in' => NULL, // Kosong karena lupa pencet IN
                             'date_out' => $date_in,
                             'time_out' => $time_in,
                             'shift_start' => @$shift->start,
@@ -431,12 +427,11 @@ class Attandances extends CI_Controller
                             'attandance_type' => 'Upload HRIS'
                         );
                         $this->crud->create('attandances', $data_attandance, "no_log");
-                        echo json_encode(array("title" => "Created", "message" => $employee->name . " | " . $date_in . " " . $time_in . " Create data Check Out", "theme" => "success"));
+                        echo json_encode(array("title" => "Created", "message" => $employee->name . " | " . $date_in . " " . $time_in . " Create Check Out (Tanpa data IN)", "theme" => "success"));
                     }
-                    //echo json_encode(array("title" => "Warning", "message" => $data['number'] . " Next", "theme" => "error"));
                 }
             } else {
-                echo json_encode(array("title" => "Warning", "message" => $data['number'] . " Empoyee ID Un Registered", "theme" => "error"));
+                echo json_encode(array("title" => "Warning", "message" => $data['number'] . " Employee ID Unregistered", "theme" => "error"));
             }
         }
     }
