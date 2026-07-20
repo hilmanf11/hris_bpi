@@ -120,7 +120,7 @@ class Cash_carries extends CI_Controller
 
         $data_employee = $this->crud->read("employees", [], ["id" => $employee_id]);
         $setup_cash_carries = $this->crud->read("setup_cash_carries", [], ["employee_id" => $employee_id]);
-        $allowance_cash_carries = $this->crud->read("allowance_cash_carries", [], ["id" => @$setup_cash_caries->allowance_id]);
+        $allowance_cash_carries = $this->crud->read("allowance_cash_carries", [], ["id" => @$setup_cash_carries->allowance_id]);
 
         if(empty($setup_cash_carries)){
             echo  json_encode(array("title" => "Not Found", "message" => "($data_employee->number - $data_employee->name) Data Setup Overtimes Not Found", "theme" => "danger"));
@@ -543,7 +543,7 @@ class Cash_carries extends CI_Controller
             $cash_carries = $this->crud->reads('cash_carries', [], ["employee_id" => $employee_id, "trans_date" => $trans_date, "request_code" => $request_code]);
 
             if (count($cash_carries) > 0) {
-                echo json_encode(array("title" => "Duplicate", "message" => "Cash Carry has been created", "theme" => "error"));
+                echo json_encode(array("title" => "Duplicate", "message" => "Overtime has been created", "theme" => "error"));
             } else {
                 $send = $this->crud->create('cash_carries', $post_final);
                 echo $send;
@@ -564,7 +564,7 @@ class Cash_carries extends CI_Controller
             ]);
 
             if (count($cash_carries) > 0) {
-                echo json_encode(array("title" => "Duplicate", "message" => "Cash Carry has been created", "theme" => "error"));
+                echo json_encode(array("title" => "Duplicate", "message" => "Overtime has been created", "theme" => "error"));
             } else {
                 $send = $this->crud->create('cash_carries', $post);
                 echo $send;
@@ -720,6 +720,14 @@ class Cash_carries extends CI_Controller
         }
 
         for ($i = 3; $i <= $total_row; $i++) {
+            // AMBIL KOLOM KUNCI (Contoh: Kolom 2 / EMPLOYE ID)
+            $employee_id = trim($data->val($i, 2));
+            $trans_date  = trim($data->val($i, 3));
+
+            // JIKA KOLOM KUNCI KOSONG, BERHENTI MEMBACA
+            if (empty($employee_id) && empty($trans_date)) {
+                break; // Menghentikan loop jika baris sudah benar-benar kosong
+            }
             $datas[] = array(
                 'number' => $data->val($i, 2),
                 'trans_date' => $data->val($i, 3),
@@ -932,7 +940,7 @@ class Cash_carries extends CI_Controller
                         </td>
                         <td style="font-size: 14px; text-align: left; margin:2px;">
                             <b>' . $config->name . '</b><br>
-                            <small>DATA CASH CARRY</small>
+                            <small>DATA OVERTIME</small>
                         </td>
                     </tr>
                 </table>
