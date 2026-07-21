@@ -25,11 +25,20 @@ class Approvals extends CI_Controller
         foreach ($datas as $data) {
             $id = $data->id;
             $user = $this->crud->read('users', [], ["username" => $data->created_by]);
-            $approval = $this->crud->read('approvals', [], ["table_name" => $table_name, "departement_id" => @$user->departement_id]);
+            $dept_id = @$user->departement_id;
+            $where_dept = "(departement_id = '$dept_id' OR departement_id = '-' OR departement_id = '' OR departement_id IS NULL)";
+           
+            $approval = $this->crud->read('approvals', [], [
+                "table_name" => $table_name, 
+                $where_dept
+            ]);
+            
+            
             
             if ($data->approved == 1) {
                 $users_id = @$approval->user_approval_2;
                 $approved = 2;
+                
             } elseif ($data->approved == 2) {
                 $users_id = @$approval->user_approval_3;
                 $approved = 3;
@@ -71,7 +80,10 @@ class Approvals extends CI_Controller
 
                 $send = $this->db->update('employees', $postEmployee, ["number" => $agreements->number]);
             }
-
+            
+            // echo $users_id;
+            // echo $approved;
+            // exit();
             $values = array(
                 "approved_by" => $this->session->username,
                 "approved_date" => date('Y-m-d H:i:s'),
@@ -91,7 +103,13 @@ class Approvals extends CI_Controller
         $tablename = $this->input->post('tablename');
         $data = $this->crud->read($tablename, [], ["id" => $id]);
         $user = $this->crud->read('users', [], ["username" => $data->created_by]);
-        $approval = $this->crud->read('approvals', [], ["table_name" => $tablename, "departement_id" => @$user->departement_id]);
+        $dept_id = @$user->departement_id;
+        $where_dept = "(departement_id = '$dept_id' OR departement_id = '-' OR departement_id = '' OR departement_id IS NULL)";
+
+        $approval = $this->crud->read('approvals', [], [
+            "table_name" => $tablename, 
+            $where_dept // String kondisi kompleks ditaruh di sini
+        ]);
 
         if ($data->approved == 1) {
             $users_id = @$approval->user_approval_2;
@@ -280,6 +298,15 @@ class Approvals extends CI_Controller
         $this->db->where('a.approved_to', $this->session->username);
         $this->db->group_by('a.created_by');
         $cash_carries = $this->db->get()->result_object();
+        
+        $this->db->select('b.name as fullname, a.approved_to, a.created_by, b.avatar');
+        $this->db->from('cash_carry a');
+        $this->db->join('users b', 'a.approved_by = b.username');
+        $this->db->join('users c', 'a.approved_to = c.username');
+        $this->db->where('a.approved_to', $this->session->username);
+        $this->db->group_by('a.created_by');
+        $cash_carries = $this->db->get()->result_object();
+        
 
         $this->db->select('b.name as fullname, a.approved_to, a.created_by, b.avatar');
         $this->db->from('payrolls a');
@@ -332,6 +359,15 @@ class Approvals extends CI_Controller
         $this->db->group_by('a.created_by');
         $cash_carries = $this->db->get()->result_object();
 
+        //Cash Carry
+        $this->db->select('b.name as fullname, a.approved_to, a.created_by, b.avatar');
+        $this->db->from('cash_carry a');
+        $this->db->join('users b', 'a.approved_by = b.username','left');
+        $this->db->join('users c', 'a.approved_to = c.username','left');
+        $this->db->where('a.approved_to', $this->session->username);
+        $this->db->group_by('a.created_by');
+        $cash_carry = $this->db->get()->result_object();
+
         //Payrolls
         $this->db->select('b.name as fullname, a.approved_to, a.created_by, b.avatar');
         $this->db->from('payrolls a');
@@ -371,6 +407,12 @@ class Approvals extends CI_Controller
         if (count($cash_carries) > 0) {
             foreach ($cash_carries as $cash_carry) {
                 $this->approvalMessage($cash_carry->avatar, $cash_carry->fullname, $cash_carry->approved_to, $cash_carry->created_by, "cash_carries");
+            }
+        }
+
+        if (count($cash_carry) > 0) {
+            foreach ($cash_carry as $cash_carry) {
+                $this->approvalMessage($cash_carry->avatar, $cash_carry->fullname, $cash_carry->approved_to, $cash_carry->created_by, "cash_carry");
             }
         }
 
@@ -555,6 +597,36 @@ class Approvals extends CI_Controller
                 f.name as fullname
             ');
         $this->db->from('cash_carries a');
+        $this->db->join('employees b', 'a.employee_id = b.id');
+        $this->db->join('divisions c', 'b.division_id = c.id');
+        $this->db->join('departements d', 'b.departement_id = d.id');
+        $this->db->join('departement_subs e', 'b.departement_sub_id = e.id');
+        $this->db->join('users f', "a.created_by = f.username");
+        $this->db->where('b.deleted', 0);
+        $this->db->where('b.status', 0);
+        $this->db->where('a.deleted', 0);
+        $this->db->where('a.approved_to', $approved_to);
+        $this->db->where('a.created_by', $created_by);
+        $this->db->group_by('a.trans_date');
+        $this->db->group_by('a.employee_id');
+        $this->db->group_by('a.type');
+        $this->db->order_by('a.trans_date', 'DESC');
+        $records = $this->db->get()->result_array();
+
+        die(json_encode($records));
+    }
+
+    public function approvalCashCarry($approved_to, $created_by)
+    {
+        $this->db->select('a.*, 
+                c.name as division_name,
+                d.name as departement_name,
+                e.name as departement_sub_name,
+                b.number as employee_number,
+                b.name as employee_name,
+                f.name as fullname
+            ');
+        $this->db->from('cash_carry a');
         $this->db->join('employees b', 'a.employee_id = b.id');
         $this->db->join('divisions c', 'b.division_id = c.id');
         $this->db->join('departements d', 'b.departement_id = d.id');

@@ -186,7 +186,7 @@
 		<a href="javascript:void(0)" class="easyui-linkbutton" data-options="plain:true" onclick="export_excel()"><i class="fa fa-file"></i> Export Excel</a>
 	</div>
 
-	<div id="dlg_approval_detail" class="easyui-window" title="Approval Confirmation" data-options="closed: true,minimizable:false,collapsible:false" style="width: 1000px; height: 400px; top: 60px;">
+	<div id="dlg_approval_detail" class="easyui-window" title="Approval Confirmation" data-options="closed: true,minimizable:false,collapsible:false" style="width: 1300px; height: 400px; top: 60px;">
 		<div hidden>
 			<input class="easyui-textbox" id="table_name" />
 			<input class="easyui-textbox" id="approved_to" />
@@ -989,6 +989,93 @@
 						}]
 					],
 				}).datagrid('enableFilter');
+			} else if (table == "cash_carry") {
+				$('#dg_approval').datagrid({
+					singleSelect: true,
+					rownumbers: true,
+					url: '<?= base_url('approvals/approvalCashCarry/') ?>' + approved_to + "/" + created_by,
+					columns: [
+						[{
+							field: 'employee_id',
+							width: 120,
+							halign: 'center',
+							title: "Employee ID",
+						}, {
+							field: 'employee_name',
+							width: 200,
+							halign: 'center',
+							title: "Employee Name",
+						}, {
+							field: 'departement_name',
+							width: 150,
+							halign: 'center',
+							title: "Departement",
+						}, {
+							field: 'departement_sub_name',
+							width: 150,
+							halign: 'center',
+							title: "Departement Sub",
+						}, {
+							field: 'trans_date',
+							width: 100,
+							halign: 'center',
+							title: "Trans Date",
+						}, {
+							field: 'start',
+							width: 80,
+							align: 'center',
+							title: "Start",
+						}, {
+							field: 'end',
+							width: 80,
+							halign: 'center',
+							title: "End",
+						}, {
+							field: 'duration_hour',
+							width: 80,
+							halign: 'center',
+							title: "Duration",
+						}, {
+							field: 'amount',
+							width: 80,
+							halign: 'center',
+							align: 'right',
+							title: "Amount",
+						}, {
+							field: 'plan',
+							width: 100,
+							halign: 'center',
+							title: "Plan Output",
+						}, {
+							field: 'actual',
+							width: 100,
+							halign: 'center',
+							title: "Actual Output",
+						}, {
+							field: 'type',
+							width: 100,
+							halign: 'center',
+							title: "Type",
+						}, {
+							field: 'remarks',
+							width: 200,
+							halign: 'center',
+							title: "Note",
+						}, {
+							field: 'action',
+							width: 100,
+							align: 'center',
+							title: "Action",
+							formatter: function(val, row) {
+								var approve = "approve('" + row.id + "','" + table + "')";
+								var disapprove = "disapprove('" + row.id + "','" + table + "')";
+								var a = '<a class="btn btn-success w-50" style="pointer-events: visible; opacity:1;" onclick="' + approve + '"><i class="fa fa-check"></i></a>';
+								var b = '<a class="btn btn-danger w-50" style="pointer-events: visible; opacity:1;" onclick="' + disapprove + '"><i class="fa fa-times"></i></a>';
+								return a + " " + b;
+							}
+						}]
+					],
+				}).datagrid('enableFilter');
 			} else if (table == "change_days") {
 				$('#dg_approval').datagrid({
 					singleSelect: true,
@@ -1406,6 +1493,7 @@
 		$.messager.confirm('Warning', 'Are you sure you want to approve all data?', function(r) {
 			if (r) {
 				$.post('<?= base_url('approvals/approveall') ?>', {
+					console.log(table_name);
 					table_name: table_name,
 					approved_to: approved_to,
 					created_by: created_by,

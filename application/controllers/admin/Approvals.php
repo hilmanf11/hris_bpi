@@ -44,7 +44,7 @@ class Approvals extends CI_Controller
             $offset = ($page - 1) * $rows;
             $result = array();
             //Select Query
-            $this->db->select('a.*, 
+            $this->db->select('a.*, case when a.table_name = \'cash_carries\' then \'overtime\' else a.table_name end as module,
                 g.name as division_name,
                 h.name as departement_name,
                 b.name as user_approval_name_1,
@@ -205,9 +205,15 @@ class Approvals extends CI_Controller
             </tr>';
         $no = 1;
         foreach ($records as $data) {
+            $table_name = $data['table_name'];
+
+            if ($table_name == 'cash_carries') {
+                $table_name = "Overtimes";
+            }
+
             $html .= '<tr>
                     <td>' . $no . '</td>
-                    <td>' . $data['table_name'] . '</td>
+                    <td>' . $table_name . '</td>
                     <td>' . $data['division_name'] . '</td>
                     <td>' . $data['departement_name'] . '</td>
                     <td>' . $data['user_approval_1'] . '</td>

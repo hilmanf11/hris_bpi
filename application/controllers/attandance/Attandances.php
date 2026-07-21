@@ -332,7 +332,7 @@ class Attandances extends CI_Controller
 
                     if (empty($shift->end)) {
                         $hour_in = date("H:i:s", strtotime($time_in));
-                        $date_out = ($hour_in > "15:00:00") ? $tomorrow : $date_in;
+                        $date_out = (strtotime($hour_in) >= strtotime("15:00:00")) ? $tomorrow : $date_in;
                     } else {
                         $date_out = (strtotime($shift->end) < strtotime($shift->start)) ? $tomorrow : $date_in;
                     }
@@ -340,10 +340,10 @@ class Attandances extends CI_Controller
                     if (!empty($attandance_in->number)) {
                         $data_attandance = array(
                             'time_in' => $time_in,
-                            'shift_start' => @$shift->start,
-                            'shift_name' => @$shift->name,
-                            'shift_detail' => @$shift->shift_name,
-                            'shift_days' => @$shift->days,
+                            'shift_start'  => isset($shift->start) ? $shift->start : NULL,
+                            'shift_name'   => isset($shift->name) ? $shift->name : NULL,
+                            'shift_detail' => isset($shift->shift_name) ? $shift->shift_name : NULL,
+                            'shift_days'   => isset($shift->days) ? $shift->days : NULL,
                             'attandance_type' => 'Upload HRIS'
                         );
                         $this->crud->update('attandances', ["id" => $attandance_in->id], $data_attandance, "no_log");
@@ -354,10 +354,10 @@ class Attandances extends CI_Controller
                             'date_in' => $date_in,
                             'time_in' => $time_in,
                             'date_out' => $date_out, // Prediksi tanggal out awal
-                            'shift_start' => @$shift->start,
-                            'shift_name' => @$shift->name,
-                            'shift_detail' => @$shift->shift_name,
-                            'shift_days' => @$shift->days,
+                            'shift_start'  => isset($shift->start) ? $shift->start : NULL,
+                            'shift_name'   => isset($shift->name) ? $shift->name : NULL,
+                            'shift_detail' => isset($shift->shift_name) ? $shift->shift_name : NULL,
+                            'shift_days'   => isset($shift->days) ? $shift->days : NULL,
                             'attandance_type' => 'Upload HRIS'
                         );
                         $this->crud->create('attandances', $data_attandance, "no_log");
@@ -404,10 +404,10 @@ class Attandances extends CI_Controller
                         $data_attandance = array(
                             'date_out' => $date_in, // Tanggal out aktual dari mesin (Hari ini/esok)
                             'time_out' => $time_in, // Jam out aktual dari mesin
-                            'shift_start' => @$shift->start,
-                            'shift_name' => @$shift->name,
-                            'shift_detail' => @$shift->shift_name,
-                            'shift_days' => @$shift->days,
+                            'shift_start'  => isset($shift->start) ? $shift->start : NULL,
+                            'shift_name'   => isset($shift->name) ? $shift->name : NULL,
+                            'shift_detail' => isset($shift->shift_name) ? $shift->shift_name : NULL,
+                            'shift_days'   => isset($shift->days) ? $shift->days : NULL,
                             'attandance_type' => 'Upload HRIS'
                         );
                         $this->crud->update('attandances', ["id" => $attandance_match->id], $data_attandance, "no_log");
@@ -420,10 +420,10 @@ class Attandances extends CI_Controller
                             'time_in' => NULL, // Kosong karena lupa pencet IN
                             'date_out' => $date_in,
                             'time_out' => $time_in,
-                            'shift_start' => @$shift->start,
-                            'shift_name' => @$shift->name,
-                            'shift_detail' => @$shift->shift_name,
-                            'shift_days' => @$shift->days,
+                            'shift_start'  => isset($shift->start) ? $shift->start : NULL,
+                            'shift_name'   => isset($shift->name) ? $shift->name : NULL,
+                            'shift_detail' => isset($shift->shift_name) ? $shift->shift_name : NULL,
+                            'shift_days'   => isset($shift->days) ? $shift->days : NULL,
                             'attandance_type' => 'Upload HRIS'
                         );
                         $this->crud->create('attandances', $data_attandance, "no_log");

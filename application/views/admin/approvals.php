@@ -3,7 +3,7 @@
     <thead>
         <tr>
             <th rowspan="2" field="ck" checkbox="true"></th>
-            <th rowspan="2" data-options="field:'table_name',width:200,halign:'center'">Module</th>
+            <th rowspan="2" data-options="field:'module',width:200,halign:'center'">Module</th>
             <th rowspan="2" data-options="field:'division_name',width:150,halign:'center'">Division</th>
             <th rowspan="2" data-options="field:'departement_name',width:150,halign:'center'">Departement</th>
             <th rowspan="2" data-options="field:'user_approval_name_1',width:200,halign:'center'">Approval 1</th>

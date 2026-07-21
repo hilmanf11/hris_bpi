@@ -12,6 +12,7 @@ class Cash_carry_monthly extends CI_Controller
         $this->load->library('form_validation');
         $this->load->library('session');
         $this->load->model('crud');
+        $this->load->library('Ciqrcode');
     }
 
     //HALAMAN UTAMA
@@ -86,7 +87,7 @@ class Cash_carry_monthly extends CI_Controller
             $this->db->join('allowance_cash_carry i', 'j.allowance_id = i.id', 'left');
             $this->db->where('a.deleted', 0);
             $this->db->where('a.status', 0);
-            $this->db->where("(a.approved_to = '' or a.approved_to is null)");
+            // $this->db->where("(a.approved_to = '' or a.approved_to is null)");
             
             if ($filter_from != "" && $filter_to != "") {
                 $this->db->where('a.trans_date >=', $filter_from);
@@ -125,6 +126,8 @@ class Cash_carry_monthly extends CI_Controller
                 // =========================================================================
                 $grouped_data = array();
 
+                $apr_sts = 1;
+
                 foreach ($cash_carry as $record) {
                     $this->db->select('c.days');
                     $this->db->from('shift_employees a');
@@ -132,6 +135,10 @@ class Cash_carry_monthly extends CI_Controller
                     $this->db->join('shift_details c', 'b.id = c.shift_id', 'left');
                     $this->db->where('a.employee_id', $record['employee_id']);
                     $shift_employee = $this->db->get()->row();
+
+                    if($record['approved_to'] != null || $record['approved_to'] != ''){
+                        $apr_sts = 0;
+                    }
 
                     $start = strtotime($record['trans_date']);
 
@@ -208,6 +215,33 @@ class Cash_carry_monthly extends CI_Controller
                     $grouped_data[$emp_id]['total_hour']   += $hour;
                     $grouped_data[$emp_id]['total_amount'] += $row_total;
                 }
+
+                $user_data = $this->db->select('a.departement_id')
+                      ->from('users a')
+                      ->where('a.username', $username)
+                      ->get()
+                      ->row();
+                $dept_id = isset($user_data->departement_id) ? $user_data->departement_id : '';
+
+                $where_dept = "(a.departement_id = '$dept_id' OR a.departement_id = '-' OR a.departement_id = '' OR a.departement_id IS NULL)";
+
+                // 1. Definisikan alias dan kolom name yang ingin diambil dari masing-masing approval
+                $this->db->select('
+                    a.*, 
+                    u1.name as name_approval_1, 
+                    u2.name as name_approval_2 
+                ');
+
+                $this->db->from('approvals a');
+
+                // 2. Lakukan 5 kali LEFT JOIN ke tabel users dengan alias yang berbeda
+                $this->db->join('users u1', 'a.user_approval_1 = u1.username', 'left');
+                $this->db->join('users u2', 'a.user_approval_2 = u2.username', 'left');
+
+                // 3. Masukkan kondisi WHERE
+                $this->db->where('a.table_name', 'cash_carry');
+                $this->db->where($where_dept); // String custom WHERE yang dibuat sebelumnya
+                $approval = $this->db->get()->row();
                 
 
                 // =========================================================================
@@ -321,6 +355,37 @@ class Cash_carry_monthly extends CI_Controller
 
                 $html .= '</tbody></table>';
 
+
+                // 1. Generate QR Code untuk Approval 1 & 2 (jika datanya ada)
+                $qr_path_1 = '';
+                $qr_path_2 = '';
+                if($apr_sts == 1){
+
+                    if (!empty($approval->name_approval_1)) {
+                        // Memanggil method bawaan kamu untuk generate gambar
+                        $this->createQrcode($approval->name_approval_1, "assets/image/qrcode/");
+                        
+                        // Path ke file gambar yang dihasilkan (sesuaikan penamaan file dari method createQrcode kamu)
+                        $img_src_1 = base_url("assets/image/qrcode/" . $approval->name_approval_1 . ".png");
+                        $qr_path_1 = '<img src="' . $img_src_1 . '" width="80" height="80" />';
+                    }
+
+                    
+                    if (!empty($approval->name_approval_2)) {
+                        $this->createQrcode($approval->name_approval_2, "assets/image/qrcode/");
+                        
+                        $img_src_2 = base_url("assets/image/qrcode/" . $approval->name_approval_2 . ".png");
+                        $qr_path_2 = '<img src="' . $img_src_2 . '" width="80" height="80" />';
+                    }
+
+                }else{
+                    $qr_path_1 = '';
+                    $qr_path_2 = '';
+                    $approval->name_approval_2 = '';
+                    $approval->name_approval_1 = '';
+                }
+                    
+
                 // TABEL APPROVAL
                 $html .= '<div class="approval-container">
                         <table class="approval-table">
@@ -331,8 +396,8 @@ class Cash_carry_monthly extends CI_Controller
                             </tr>
                             <tr>
                                 <td class="approval-space"></td>
-                                <td class="approval-space"></td>
-                                <td class="approval-space"></td>
+                                <td class="approval-space">' . $qr_path_2 . '</td>
+                                <td class="approval-space">' . $qr_path_1 . '</td>
                             </tr>
                             <tr>
                                 <td class="approval-position"></td>
@@ -341,8 +406,8 @@ class Cash_carry_monthly extends CI_Controller
                             </tr>
                             <tr>
                                 <td class="approval-name"></td>
-                                <td class="approval-name"></td>
-                                <td class="approval-name"></td>
+                                <td class="approval-name">'.$approval->name_approval_2.'</td>
+                                <td class="approval-name">'.$approval->name_approval_1.'</td>
                             </tr>
                         </table>
                         <div class="clearfix"></div>

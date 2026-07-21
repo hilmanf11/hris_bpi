@@ -182,14 +182,18 @@ class Cash_carry extends CI_Controller
                 //Kalo ada tanggal Merah
                 if (count($calendars) > 0) {
                     $total = ((@$allowance_cash_carry->holiday * $duration) + $meal);
+                    $allowance_perhour = @$allowance_cash_carry->holiday;
                 } else {
                     $total = ((@$allowance_cash_carry->weekday * $duration) + $meal);
+                    $allowance_perhour = @$allowance_cash_carry->weekday;
                 }
             } else {
                 if (date('w', $hourTrans) === '0') {
                     $total = ((@$allowance_cash_carry->sunday * $duration) + $meal);
+                    $allowance_perhour = @$allowance_cash_carry->sunday;
                 } else {
                     $total = ((@$allowance_cash_carry->saturday * $duration) + $meal);
+                    $allowance_perhour = @$allowance_cash_carry->saturday;
                 }
             }
         } else {
@@ -198,21 +202,25 @@ class Cash_carry extends CI_Controller
                 //Kalo ada tanggal Merah
                 if (count($calendars) > 0) {
                     $total = ((@$allowance_cash_carry->holiday * $duration) + $meal);
+                    $allowance_perhour = @$allowance_cash_carry->holiday;
                 } else {
                     $total = ((@$allowance_cash_carry->weekday * $duration) + $meal);
+                    $allowance_perhour = @$allowance_cash_carry->weekday;
                 }
             } else {
                 if (date('w', $hourTrans) === '0') {
                     $total = ((@$allowance_cash_carry->sunday * $duration) + $meal);
+                    $allowance_perhour = @$allowance_cash_carry->sunday;
                 } else {
                     $total = ((@$allowance_cash_carry->saturday * $duration) + $meal);
+                    $allowance_perhour = @$allowance_cash_carry->saturday;
                 }
             }
         }
 
         return array(
             'amount' => $total,
-            'amount_perhour' => $allowance_cash_carry->weekday,
+            'amount_perhour' => $allowance_perhour,
             'meal_amount' => $meal,
         );
     }

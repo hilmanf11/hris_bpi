@@ -106,7 +106,7 @@ class Crud extends CI_Model
                     $this->logs("Create", json_encode($data), $table);
                     $this->approvals($table, $id);
                 }
-                return json_encode(array("title" => "Good Job", "message" => "Data Saved Successfully", "theme" => "success"));
+                return json_encode(array("title" => "Good Job", "message" => "Data Saved Successfully ", "theme" => "success"));
             } else {
                 return log_message('error', 'There is an error in your system or data');
             }
@@ -222,7 +222,14 @@ class Crud extends CI_Model
         $fields = $query->result_array();
 
         $user = $this->read('users', [], ["username" => $this->session->username]);
-        $approval = $this->read('approvals', [], ["table_name" => $table, "departement_id" => @$user->departement_id]);
+        $dept_id = $user->departement_id;
+        // Membuat custom query untuk menampung semua kondisi department ID
+        $where_dept = "(departement_id = '$dept_id' OR departement_id = '-' OR departement_id = '' OR departement_id IS NULL)";
+
+        $approval = $this->read('approvals', [], [
+            "table_name" => $table,
+            $where_dept  => NULL // Dimasukkan sebagai raw query string agar dibaca utuh oleh CodeIgniter
+        ]);
 
         $fieldExists = false;
         foreach ($fields as $field) {
