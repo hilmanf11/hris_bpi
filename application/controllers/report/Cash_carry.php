@@ -32,6 +32,7 @@ class Cash_carry extends CI_Controller
 
     public function print($option = "")
     {
+        error_reporting(0);
         if ($option == "excel") {
             $format = date("Ymd");
             header("Content-type: application/vnd-ms-excel");
@@ -111,9 +112,9 @@ class Cash_carry extends CI_Controller
                     $this->db->like('b.bank_name', $filter_bank);
                 }
             }
+            $this->db->order_by('b.name', 'ASC');
             $this->db->order_by('h.name', 'ASC');
             $this->db->order_by('c.name', 'ASC');
-            $this->db->order_by('b.name', 'ASC');
             $this->db->order_by('a.trans_date', 'ASC');
             
             $cash_carry = $this->db->get()->result_array();
@@ -238,7 +239,7 @@ class Cash_carry extends CI_Controller
                         }
                     }
 
-                    $amount = ($rate * $hour) + $meal;
+                    $amount = ($record['amount_perhour'] * $hour) + $meal;
 
                     // Grouping berdasarkan ID Karyawan
                     $emp_id = $record['employee_id'];
@@ -430,6 +431,11 @@ class Cash_carry extends CI_Controller
                 $grand_total_dibayar = 0;
 
                 foreach ($grouped_data as $row) {
+                    $row['weekday_amount'] = round($row['weekday_amount'], -3);
+                    $row['saturday_amount'] = round($row['saturday_amount'], -3);
+                    $row['sunday_amount'] = round($row['sunday_amount'], -3);
+                    $row['holiday_amount'] = round($row['holiday_amount'], -3);
+                    $row['total_amount'] =$row['weekday_amount']+$row['saturday_amount']+$row['sunday_amount']+$row['holiday_amount'];
                     $html .= '<tr>
                                 <td style="text-align:center;">' . $no . '</td>
                                 <td style="text-align:center;">' . $row['employee_number'] . '</td>
@@ -486,29 +492,38 @@ class Cash_carry extends CI_Controller
                 $qr_path_2 = '';
                 if($apr_sts == 1){
 
-                    if (!empty($approval->name_approval_1)) {
+                    // if (!empty($approval->name_approval_1)) {
                         // Memanggil method bawaan kamu untuk generate gambar
-                        $this->createQrcode($approval->name_approval_1, "assets/image/qrcode/");
+                        $this->createQrcode('Lhuvita Rachmadhanti', "assets/image/qrcode/");
                         
                         // Path ke file gambar yang dihasilkan (sesuaikan penamaan file dari method createQrcode kamu)
-                        $img_src_1 = base_url("assets/image/qrcode/" . $approval->name_approval_1 . ".png");
+                        $img_src_1 = base_url("assets/image/qrcode/" . 'Lhuvita Rachmadhanti' . ".png");
                         $qr_path_1 = '<img src="' . $img_src_1 . '" width="80" height="80" />';
-                    }
+                    // }
 
                     
-                    if (!empty($approval->name_approval_2)) {
-                        $this->createQrcode($approval->name_approval_2, "assets/image/qrcode/");
+                    // if (!empty($approval->name_approval_2)) {
+                        $this->createQrcode('Yusman Nugraha Utama', "assets/image/qrcode/");
                         
-                        $img_src_2 = base_url("assets/image/qrcode/" . $approval->name_approval_2 . ".png");
+                        $img_src_2 = base_url("assets/image/qrcode/" . 'Yusman Nugraha Utama' . ".png");
                         $qr_path_2 = '<img src="' . $img_src_2 . '" width="80" height="80" />';
-                    }
+                    // }
+
+                    // if (!empty($approval->name_approval_3)) {
+                        $this->createQrcode('Faris Fahdian', "assets/image/qrcode/");
+                        
+                        $img_src_3 = base_url("assets/image/qrcode/" . 'Faris Fahdian' . ".png");
+                        $qr_path_3 = '<img src="' . $img_src_3 . '" width="80" height="80" />';
+                    // }
 
                 }else{
                     $qr_path_1 = '';
                     $qr_path_2 = '';
-                    $approval->name_approval_2 = '';
-                    $approval->name_approval_1 = '';
+                    // $approval->name_approval_2 = '';
+                    // $approval->name_approval_1 = '';
                 }
+
+                // echo json_encode($approval );
 
                 // TABEL APPROVAL
                 $html .= '<div class="approval-container">
@@ -524,14 +539,14 @@ class Cash_carry extends CI_Controller
                                 <td class="approval-space">' . $qr_path_1 . '</td>
                             </tr>
                             <tr>
-                                <td class="approval-position"></td>
+                                <td class="approval-position">ACCOUNTING & FINANCE</td>
                                 <td class="approval-position">GENERAL MANAGER</td>
                                 <td class="approval-position">HRD</td>
                             </tr>
                             <tr>
-                                <td class="approval-name"></td>
-                                <td class="approval-name">'.$approval->name_approval_2.'</td>
-                                <td class="approval-name">'.$approval->name_approval_1.'</td>
+                                <td class="approval-name">Faris Fahdian</td>
+                                <td class="approval-name">Yusman Nugraha Utama</td>
+                                <td class="approval-name">Lhuvita Rachmadhanti</td>
                             </tr>
                         </table>
                         <div class="clearfix"></div>

@@ -1493,7 +1493,6 @@
 		$.messager.confirm('Warning', 'Are you sure you want to approve all data?', function(r) {
 			if (r) {
 				$.post('<?= base_url('approvals/approveall') ?>', {
-					console.log(table_name);
 					table_name: table_name,
 					approved_to: approved_to,
 					created_by: created_by,

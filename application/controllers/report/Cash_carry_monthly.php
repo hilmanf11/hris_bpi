@@ -338,11 +338,11 @@ class Cash_carry_monthly extends CI_Controller
                                 <td>' . $row['employee_number'] . '</td>
                                 <td>' . $row['employee_name'] . '</td>
                                 <td style="text-align:center;">' . $source . '</td>
-                                <td style="text-align:right;">' . number_format($row['total_amount'], 2) . '</td>
+                                <td style="text-align:right;">' . number_format(round($row['total_amount'],-3), 2) . '</td>
                                 <td></td>
                             </tr>';
 
-                    $grand_total_all += $row['total_amount'];
+                    $grand_total_all += round($row['total_amount'],-3);
                     $no++;
                 }
 
@@ -361,28 +361,35 @@ class Cash_carry_monthly extends CI_Controller
                 $qr_path_2 = '';
                 if($apr_sts == 1){
 
-                    if (!empty($approval->name_approval_1)) {
+                    // if (!empty($approval->name_approval_1)) {
                         // Memanggil method bawaan kamu untuk generate gambar
-                        $this->createQrcode($approval->name_approval_1, "assets/image/qrcode/");
+                        $this->createQrcode('Lhuvita Rachmadhanti', "assets/image/qrcode/");
                         
                         // Path ke file gambar yang dihasilkan (sesuaikan penamaan file dari method createQrcode kamu)
-                        $img_src_1 = base_url("assets/image/qrcode/" . $approval->name_approval_1 . ".png");
+                        $img_src_1 = base_url("assets/image/qrcode/" . 'Lhuvita Rachmadhanti' . ".png");
                         $qr_path_1 = '<img src="' . $img_src_1 . '" width="80" height="80" />';
-                    }
+                    // }
 
                     
-                    if (!empty($approval->name_approval_2)) {
-                        $this->createQrcode($approval->name_approval_2, "assets/image/qrcode/");
+                    // if (!empty($approval->name_approval_2)) {
+                        $this->createQrcode('Yusman Nugraha Utama', "assets/image/qrcode/");
                         
-                        $img_src_2 = base_url("assets/image/qrcode/" . $approval->name_approval_2 . ".png");
+                        $img_src_2 = base_url("assets/image/qrcode/" . 'Yusman Nugraha Utama' . ".png");
                         $qr_path_2 = '<img src="' . $img_src_2 . '" width="80" height="80" />';
-                    }
+                    // }
+
+                    // if (!empty($approval->name_approval_3)) {
+                        $this->createQrcode('Faris Fahdian', "assets/image/qrcode/");
+                        
+                        $img_src_3 = base_url("assets/image/qrcode/" . 'Faris Fahdian' . ".png");
+                        $qr_path_3 = '<img src="' . $img_src_3 . '" width="80" height="80" />';
+                    // }
 
                 }else{
                     $qr_path_1 = '';
                     $qr_path_2 = '';
-                    $approval->name_approval_2 = '';
-                    $approval->name_approval_1 = '';
+                    // $approval->name_approval_2 = '';
+                    // $approval->name_approval_1 = '';
                 }
                     
 
@@ -400,14 +407,14 @@ class Cash_carry_monthly extends CI_Controller
                                 <td class="approval-space">' . $qr_path_1 . '</td>
                             </tr>
                             <tr>
-                                <td class="approval-position"></td>
-                                <td class="approval-position">General Manager</td>
+                                <td class="approval-position">ACCOUNTING & FINANCE</td>
+                                <td class="approval-position">GENERAL MANAGER</td>
                                 <td class="approval-position">HRD</td>
                             </tr>
                             <tr>
-                                <td class="approval-name"></td>
-                                <td class="approval-name">'.$approval->name_approval_2.'</td>
-                                <td class="approval-name">'.$approval->name_approval_1.'</td>
+                                <td class="approval-name">Faris Fahdian</td>
+                                <td class="approval-name">Yusman Nugraha Utama</td>
+                                <td class="approval-name">Lhuvita Rachmadhanti</td>
                             </tr>
                         </table>
                         <div class="clearfix"></div>

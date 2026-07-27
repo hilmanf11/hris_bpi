@@ -466,6 +466,74 @@ class Cash_carry extends CI_Controller
             $duration['duration_hour'] = $duration['duration_hour'];
             $data_amount = $this->readOvertimePrice($employee_id, $trans_date, $duration['duration_hour'], $meal);
 
+            $sql = "SELECT 
+                        a.*, 
+                        b.amount AS basic_salary
+                    FROM employees a
+                    LEFT JOIN setup_salaries b ON a.id = b.employee_id
+                    WHERE a.id = ?";
+
+            $query = $this->db->query($sql, array($employee_id));
+            $employee = $query->row();
+
+            //Allowances / Tunjangan kerja
+            $q_allowance = $this->db->query("SELECT b.number, b.name, coalesce(a.amount, 0) as amount, b.calculate_days, b.type
+                    FROM allowances b
+                    LEFT JOIN setup_allowances a ON a.allowance_id = b.id and a.employee_id = '$employee_id'
+                    where b.type = 'FIX'
+                    GROUP BY b.id ORDER BY b.name asc");
+            $r_allowance = $q_allowance->result_array();
+
+            $arr_allowance_number = "";
+            $arr_allowance_amount = "";
+            $arr_allowance_amount_total = 0;
+            $arr_allowance_amount_total_bpjs = 0;
+            $arr_allowance_amount_number = 0;
+            $count_allowance_number = 0;
+            $hkw = 25;
+            foreach ($r_allowance as $allowance_data) {
+
+                if ($allowance_data['calculate_days'] == "1") {
+                    $arr_allowance_number .= strtolower($allowance_data['number']) . ",";
+                    $arr_allowance_amount .= ($allowance_data['amount'] * $hkw) . ",";
+                    $arr_allowance_amount_total += ($allowance_data['amount'] * $hkw);
+                } else {
+                    $arr_allowance_number .= strtolower($allowance_data['number']) . ",";
+                    $arr_allowance_amount .= $allowance_data['amount'] . ",";
+                    $arr_allowance_amount_total += $allowance_data['amount'];
+                }
+
+                if ($allowance_data['type'] == "TEMPORARY" && $allowance_data['amount'] > 0) {
+                    $arr_allowance_amount_total_bpjs += 0;
+                    $count_allowance_number += 1;
+
+                    if ($allowance_data['calculate_days'] == "1") {
+                        $arr_allowance_amount_number += ($allowance_data['amount'] * $hkw);
+                    } else {
+                        $arr_allowance_amount_number += ($allowance_data['amount']);
+                    }
+                } elseif ($allowance_data['type'] == "FIX" && $allowance_data['amount'] > 0) {
+                    $arr_allowance_amount_total_bpjs += ($allowance_data['amount']);
+                    $count_allowance_number += 0;
+                    $arr_allowance_amount_number += 0;
+                } else {
+                    $arr_allowance_amount_total_bpjs += 0;
+                    $count_allowance_number += 0;
+                    $arr_allowance_amount_number += 0;
+                }
+            }
+
+            $setup_cash_carry_get = $this->crud->read("setup_cash_carry", [], ["employee_id" => $employee_id]);
+            $payment_type = isset($setup_cash_carry_get->payment_type) ? $setup_cash_carry_get->payment_type : 'CASH';
+            $base_salary = $employee->basic_salary + $arr_allowance_amount_total;
+            if($payment_type == "TRANSFER" && $employee->group_id == '20231005000002' ){ 
+                $data_amount['amount_perhour'] = $base_salary/7/25;
+                $data_amount['amount'] = $data_amount['amount_perhour'] * $duration['duration_hour'];
+            } else {
+                $data_amount['amount_perhour'] = $data_amount['amount_perhour'];
+                $data_amount['amount'] = $data_amount['amount'];
+            }
+
             $post_final = array(
                 "trans_date" =>  $trans_date,
                 "employee_id" =>  $employee_id,
@@ -523,6 +591,77 @@ class Cash_carry extends CI_Controller
             $duration = $this->convertHour($trans_date, $start, $end, $employee_id, $break);
             $duration['duration_hour'] = $duration['duration_hour'];
             $data_amount = $this->readOvertimePrice($employee_id, $trans_date, $duration['duration_hour'], $meal);
+
+            $sql = "SELECT 
+                        a.*, 
+                        b.amount AS basic_salary
+                    FROM employees a
+                    LEFT JOIN setup_salaries b ON a.id = b.employee_id
+                    WHERE a.id = ?";
+
+            $query = $this->db->query($sql, array($employee_id));
+            $employee = $query->row();
+
+            //Allowances / Tunjangan kerja
+            $q_allowance = $this->db->query("SELECT b.number, b.name, coalesce(a.amount, 0) as amount, b.calculate_days, b.type
+                    FROM allowances b
+                    LEFT JOIN setup_allowances a ON a.allowance_id = b.id and a.employee_id = '$employee_id'
+                    where b.type = 'FIX'
+                    GROUP BY b.id ORDER BY b.name asc");
+            $r_allowance = $q_allowance->result_array();
+
+            $arr_allowance_number = "";
+            $arr_allowance_amount = "";
+            $arr_allowance_amount_total = 0;
+            $arr_allowance_amount_total_bpjs = 0;
+            $arr_allowance_amount_number = 0;
+            $count_allowance_number = 0;
+            $hkw = 25;
+            foreach ($r_allowance as $allowance_data) {
+
+                if ($allowance_data['calculate_days'] == "1") {
+                    $arr_allowance_number .= strtolower($allowance_data['number']) . ",";
+                    $arr_allowance_amount .= ($allowance_data['amount'] * $hkw) . ",";
+                    $arr_allowance_amount_total += ($allowance_data['amount'] * $hkw);
+                } else {
+                    $arr_allowance_number .= strtolower($allowance_data['number']) . ",";
+                    $arr_allowance_amount .= $allowance_data['amount'] . ",";
+                    $arr_allowance_amount_total += $allowance_data['amount'];
+                }
+
+                if ($allowance_data['type'] == "TEMPORARY" && $allowance_data['amount'] > 0) {
+                    $arr_allowance_amount_total_bpjs += 0;
+                    $count_allowance_number += 1;
+
+                    if ($allowance_data['calculate_days'] == "1") {
+                        $arr_allowance_amount_number += ($allowance_data['amount'] * $hkw);
+                    } else {
+                        $arr_allowance_amount_number += ($allowance_data['amount']);
+                    }
+                } elseif ($allowance_data['type'] == "FIX" && $allowance_data['amount'] > 0) {
+                    $arr_allowance_amount_total_bpjs += ($allowance_data['amount']);
+                    $count_allowance_number += 0;
+                    $arr_allowance_amount_number += 0;
+                } else {
+                    $arr_allowance_amount_total_bpjs += 0;
+                    $count_allowance_number += 0;
+                    $arr_allowance_amount_number += 0;
+                }
+            }
+
+            $setup_cash_carry_get = $this->crud->read("setup_cash_carry", [], ["employee_id" => $employee_id]);
+            $payment_type = isset($setup_cash_carry_get->payment_type) ? $setup_cash_carry_get->payment_type : 'CASH';
+            $allowance_id = isset($setup_cash_carry_get->allowance_id) ? $setup_cash_carry_get->allowance_id : '';
+            $base_salary = $employee->basic_salary + $arr_allowance_amount_total;
+            if($payment_type == "TRANSFER" && $allowance_id == '20260721000001' ){ 
+                $data_amount['amount_perhour'] = $base_salary/7/25;
+                $data_amount['amount'] = $data_amount['amount_perhour'] * $duration['duration_hour'];
+                $codee = '....1';
+            } else {
+                $data_amount['amount_perhour'] = $data_amount['amount_perhour'];
+                $data_amount['amount'] = $data_amount['amount'];
+                $codee = '....2';
+            }
 
             $post_final = array(
                 "trans_date" =>  $trans_date,
@@ -719,7 +858,15 @@ class Cash_carry extends CI_Controller
                 echo json_encode(array("title" => "Format Date", "message" => $data['number'] . " Format Date is Null", "theme" => "error"));
             } else {
                 
-                $employee = $this->crud->read('employees', [], ["number" => $data['number']]);
+                $sql = "SELECT 
+                            a.*, 
+                            b.amount AS basic_salary
+                        FROM employees a
+                        LEFT JOIN setup_salaries b ON a.id = b.employee_id
+                        WHERE a.number = ?";
+
+                $query = $this->db->query($sql, array($data['number']));
+                $employee = $query->row();
 
                 if (!empty($employee)) {
                     $cash_carry = $this->crud->read('cash_carry', [], ["employee_id" => $employee->id, "trans_date" => $data['trans_date'], "type" => $data['type']]);
@@ -762,6 +909,64 @@ class Cash_carry extends CI_Controller
 
                         $duration = $this->convertHour($data['trans_date'], $data['start'], $data['end'], $employee->id, $break);
                         $data_amount = $this->readOvertimePrice($employee->id, $data['trans_date'], $duration['duration_hour'], $meal);
+
+                        //Allowances / Tunjangan kerja
+                        $q_allowance = $this->db->query("SELECT b.number, b.name, coalesce(a.amount, 0) as amount, b.calculate_days, b.type
+                                FROM allowances b
+                                LEFT JOIN setup_allowances a ON a.allowance_id = b.id and a.employee_id = '$employee->id'
+                                where b.type = 'FIX'
+                                GROUP BY b.id ORDER BY b.name asc");
+                        $r_allowance = $q_allowance->result_array();
+
+                        $arr_allowance_number = "";
+                        $arr_allowance_amount = "";
+                        $arr_allowance_amount_total = 0;
+                        $arr_allowance_amount_total_bpjs = 0;
+                        $arr_allowance_amount_number = 0;
+                        $count_allowance_number = 0;
+                        $hkw = 25;
+                        foreach ($r_allowance as $allowance_data) {
+
+                            if ($allowance_data['calculate_days'] == "1") {
+                                $arr_allowance_number .= strtolower($allowance_data['number']) . ",";
+                                $arr_allowance_amount .= ($allowance_data['amount'] * $hkw) . ",";
+                                $arr_allowance_amount_total += ($allowance_data['amount'] * $hkw);
+                            } else {
+                                $arr_allowance_number .= strtolower($allowance_data['number']) . ",";
+                                $arr_allowance_amount .= $allowance_data['amount'] . ",";
+                                $arr_allowance_amount_total += $allowance_data['amount'];
+                            }
+
+                            if ($allowance_data['type'] == "TEMPORARY" && $allowance_data['amount'] > 0) {
+                                $arr_allowance_amount_total_bpjs += 0;
+                                $count_allowance_number += 1;
+
+                                if ($allowance_data['calculate_days'] == "1") {
+                                    $arr_allowance_amount_number += ($allowance_data['amount'] * $hkw);
+                                } else {
+                                    $arr_allowance_amount_number += ($allowance_data['amount']);
+                                }
+                            } elseif ($allowance_data['type'] == "FIX" && $allowance_data['amount'] > 0) {
+                                $arr_allowance_amount_total_bpjs += ($allowance_data['amount']);
+                                $count_allowance_number += 0;
+                                $arr_allowance_amount_number += 0;
+                            } else {
+                                $arr_allowance_amount_total_bpjs += 0;
+                                $count_allowance_number += 0;
+                                $arr_allowance_amount_number += 0;
+                            }
+                        }
+                        
+                        $setup_cash_carry_get = $this->crud->read("setup_cash_carry", [], ["employee_id" => $employee->id]);
+                        $payment_type = isset($setup_cash_carry_get->payment_type) ? $setup_cash_carry_get->payment_type : 'CASH';
+                        $base_salary = $employee->basic_salary + $arr_allowance_amount_total;
+                        if($payment_type == "TRANSFER" && $employee->group_id == '20231005000002' ){ 
+                            $data_amount['amount_perhour'] = $base_salary/7/25;
+                            $data_amount['amount'] = $data_amount['amount_perhour'] * $duration['duration_hour'];
+                        } else {
+                            $data_amount['amount_perhour'] = $data_amount['amount_perhour'];
+                            $data_amount['amount'] = $data_amount['amount'];
+                        }
                         
                         $post_cash_carry = array(
                             'employee_id' => $employee->id,

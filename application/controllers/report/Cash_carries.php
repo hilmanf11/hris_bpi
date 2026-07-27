@@ -257,7 +257,7 @@ class Cash_carries extends CI_Controller
             $this->db->join('allowance_cash_carries i', 'j.allowance_id = i.id', 'left');
             $this->db->where('a.deleted', 0);
             $this->db->where('a.status', 0);
-            $this->db->where("(a.approved_to = '' or a.approved_to is null)");
+            // $this->db->where("(a.approved_to = '' or a.approved_to is null)");
             if ($filter_from != "" && $filter_to != "") {
                 $this->db->where('a.trans_date >=', $filter_from);
                 $this->db->where('a.trans_date <=', $filter_to);
@@ -351,13 +351,20 @@ class Cash_carries extends CI_Controller
                                 </tr>';
                 $no = 1;
                 $grand_total = 0;
+                $apr_sts = 1;
                 foreach ($cash_carries as $record) {
+                    
+
                     $this->db->select('c.days');
                     $this->db->from('shift_employees a');
                     $this->db->join('shifts b', 'a.shift_id = b.id', 'left');
                     $this->db->join('shift_details c', 'b.id = c.shift_id', 'left');
                     $this->db->where('a.employee_id', $record['employee_id']);
                     $shift_employee = $this->db->get()->row();
+
+                    if($record['approved_to'] != null || $record['approved_to'] != ''){
+                        $apr_sts = 0;
+                    }
 
                     $this->db->select('trans_date');
                     $this->db->from('calendars');
@@ -528,6 +535,33 @@ class Cash_carries extends CI_Controller
             $this->db->order_by('d.name', 'ASC');
             //Get Data Array
             $departements = $this->db->get()->result_array();
+
+            $user_data = $this->db->select('a.departement_id')
+                    ->from('users a')
+                    ->where('a.username', $username)
+                    ->get()
+                    ->row();
+            $dept_id = isset($user_data->departement_id) ? $user_data->departement_id : '';
+
+            $where_dept = "(a.departement_id = '$dept_id' OR a.departement_id = '-' OR a.departement_id = '' OR a.departement_id IS NULL)";
+
+            // 1. Definisikan alias dan kolom name yang ingin diambil dari masing-masing approval
+            $this->db->select('
+                a.*, 
+                u1.name as name_approval_1, 
+                u2.name as name_approval_2 
+            ');
+
+            $this->db->from('approvals a');
+
+            // 2. Lakukan 5 kali LEFT JOIN ke tabel users dengan alias yang berbeda
+            $this->db->join('users u1', 'a.user_approval_1 = u1.username', 'left');
+            $this->db->join('users u2', 'a.user_approval_2 = u2.username', 'left');
+
+            // 3. Masukkan kondisi WHERE
+            $this->db->where('a.table_name', 'cash_carry');
+            $this->db->where($where_dept); // String custom WHERE yang dibuat sebelumnya
+            $approval = $this->db->get()->row();
 
             foreach ($departements as $departement) {
                 $html = '<html><head><title>Print Data</title></head><style>body {font-family: Arial, Helvetica, sans-serif;}#customers {border-collapse: collapse;width: 100%;font-size: 12px;}#customers td, #customers th {border: 1px solid #ddd;padding: 2px;}#customers tr:nth-child(even){background-color: #f2f2f2;}#customers tr:hover {background-color: #ddd;}#customers th {padding-top: 2px;padding-bottom: 2px;text-align: left;color: black;}</style>
@@ -752,6 +786,40 @@ class Cash_carries extends CI_Controller
                                 </tr>';
                     $totalAmount += $total;
                     $no++;
+                }
+
+                if($apr_sts == 1){
+
+                    if (!empty($approval->name_approval_1)) {
+                        // Memanggil method bawaan kamu untuk generate gambar
+                        $this->createQrcode($approval->name_approval_1, "assets/image/qrcode/");
+                        
+                        // Path ke file gambar yang dihasilkan (sesuaikan penamaan file dari method createQrcode kamu)
+                        $img_src_1 = base_url("assets/image/qrcode/" . $approval->name_approval_1 . ".png");
+                        $qr_path_1 = '<img src="' . $img_src_1 . '" width="80" height="80" />';
+                    }
+
+                    
+                    if (!empty($approval->name_approval_2)) {
+                        $this->createQrcode($approval->name_approval_2, "assets/image/qrcode/");
+                        
+                        $img_src_2 = base_url("assets/image/qrcode/" . $approval->name_approval_2 . ".png");
+                        $qr_path_2 = '<img src="' . $img_src_2 . '" width="80" height="80" />';
+                    }
+
+
+                    if (!empty($approval->name_approval_3)) {
+                        $this->createQrcode($approval->name_approval_3, "assets/image/qrcode/");
+                        
+                        $img_src_3 = base_url("assets/image/qrcode/" . $approval->name_approval_3 . ".png");
+                        $qr_path_3 = '<img src="' . $img_src_3 . '" width="80" height="80" />';
+                    }
+
+                }else{
+                    $qr_path_1 = '';
+                    $qr_path_2 = '';
+                    $approval->name_approval_2 = '';
+                    $approval->name_approval_1 = '';
                 }
 
                 $html .= '  <tr>

@@ -129,6 +129,15 @@ class Setup_cash_carry extends CI_Controller
             $employee_id = $post['employee_id'];
             $allowance_name = $post['allowance_name'];
             $payment_type = isset($post['payment_type']) ? $post['payment_type'] : 'CASH';
+            $round_duration = isset($post['round_duration']) ? $post['round_duration'] : null;
+
+            if($payment_type == "null" || $payment_type==''){
+                $payment_type = 'CASH';
+            }
+
+            if($round_duration == "null" || $round_duration==''){
+                $round_duration = '1';
+            }
 
             $setup_cash_carry = $this->crud->read("setup_cash_carry", [], ["employee_id" => $employee_id]);
             $allowance = $this->crud->read('allowance_cash_carry', [], ["name" => $allowance_name]);
@@ -137,7 +146,7 @@ class Setup_cash_carry extends CI_Controller
                 $postFinal = array(
                     "employee_id" => $post['employee_id'],
                     "allowance_id" => @$allowance->id,
-                    "round_duration" => isset($post['round_duration']) ? $post['round_duration'] : null,
+                    "round_duration" => @$round_duration,
                     "payment_type" => $payment_type,
                 );
 
@@ -147,7 +156,7 @@ class Setup_cash_carry extends CI_Controller
                 $postFinal = array(
                     "employee_id" => $employee_id,
                     "allowance_id" => @$allowance->id,
-                    "round_duration" => isset($post['round_duration']) ? $post['round_duration'] : null,
+                    "round_duration" => @$round_duration,
                     "payment_type" => $payment_type,
                 );
 

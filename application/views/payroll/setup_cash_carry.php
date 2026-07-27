@@ -331,8 +331,6 @@
                         }
                     }
                 });
-
-                $('#dg').datagrid('reload');
             },
             rowStyler: function(index, row) {
                 if (row.allowance_name == null) {

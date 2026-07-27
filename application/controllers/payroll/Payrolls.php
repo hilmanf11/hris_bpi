@@ -92,12 +92,23 @@ class Payrolls extends CI_Controller
             $period_start = date("Y-m", strtotime($filter_from));
             $period_end = date("Y-m", strtotime($filter_to));
 
-            $this->db->select('a.*, b.national_id, d.name as source_name, e.ter as ter_persentase');
+            $this->db->select("a.*, b.national_id,
+            d.name as source_name, 
+            e.ter as ter_persentase,
+            r.request_date,
+                r.resign_date,
+                r.status_resign,
+                CASE 
+                    WHEN r.employee_id IS NOT NULL THEN 'Resign'
+                    ELSE 'Active'
+                END AS status_karyawan
+            ");
             $this->db->from('payrolls a');
             $this->db->join('employees b', 'a.employee_id = b.id');
             $this->db->join('sources d', 'b.source_id = d.id', 'left');
             $this->db->join('marital_categories e', 'a.ter_number = e.number', 'left');
             $this->db->join('privilege_groups c', "(b.group_id = c.group_id or b.group_id is null or b.group_id = '') and c.username = '$username' and c.status = '1'");
+            $this->db->join('resignations r', 'a.employee_id = r.employee_id', 'left');
             if ($filter_from != "" && $filter_to != "") {
                 $this->db->where('a.period_start =', $period_start);
                 $this->db->where('a.period_end =', $period_end);
@@ -118,10 +129,21 @@ class Payrolls extends CI_Controller
             $records = $this->db->get()->result_array();
             foreach ($records as $record) {
 
+                if (strtolower(@$record['status_karyawan']) == 'resign') {
+                    $status = "<font color='red'>RESIGN</font>";
+                } else {
+                    if($record['status'] == "0"){
+                        $status = "ACTIVE";
+                    }else{
+                        $status = "INACTIVE";
+                    }
+                }
+
                 $arr = array(
                     "employee_id" => $record['employee_id'],
                     "number" => $record['number'],
                     "name" => $record['name'],
+                    "status_karyawan" => $status,
                     "period_start" => $record['period_start'],
                     "period_end" => $record['period_end'],
                     "division_name" => $record['division_name'],
@@ -218,47 +240,58 @@ class Payrolls extends CI_Controller
             $username = $this->session->username;
 
             $query = $this->db->query("SELECT a.*, 
-                    b.name as division_name,
-                    c.name as departement_name,
-                    d.name as departement_sub_name,
-                    d.type,
-                    f.id as contract_id,
-                    f.name as `contract_name`,
-                    g.name as position_name,
-                    g.level,
-                    i.id as group_id,
-                    i.name as group_name,
-                    i.calculate as group_calculate,
-                    n.name as shift_name,
-                    l.name as shift_name_2,
-                    l.days,
-                    p.amount as salary,
-                    p.bpjs,
-                    q.number as marital,
-                    q.ter_type,
-                    a.tax_id
-                FROM employees a
-                JOIN divisions b ON a.division_id = b.id
-                JOIN departements c ON a.departement_id = c.id
-                JOIN departement_subs d ON a.departement_sub_id = d.id
-                LEFT JOIN contracts f ON a.contract_id = f.id
-                LEFT JOIN positions g ON a.position_id = g.id
-                LEFT JOIN groups i ON a.group_id = i.id
-                LEFT JOIN shift_employees k ON a.id = k.employee_id
-                LEFT JOIN shifts n ON k.shift_id = n.id
-                LEFT JOIN shift_details l ON n.id = l.shift_id
-                JOIN setup_salaries p ON p.employee_id = a.id
-                LEFT JOIN maritals q ON a.marital_id = q.id
-                JOIN privilege_groups m ON (i.id = m.group_id or m.group_id is null or m.group_id = '') and m.username = '$username' and m.status = '1'
-                WHERE a.deleted = 0 and a.status = 0
-                AND a.division_id LIKE '%$filter_division%'
-                AND a.departement_id LIKE '%$filter_departement%'
-                AND a.departement_sub_id LIKE '%$filter_departement_sub%'
-                AND a.contract_id LIKE '%$filter_employee_type%'
-                AND a.id LIKE '%$filter_employee%'
-                AND a.group_id LIKE '%$filter_group%'
-                GROUP BY a.id
-                ORDER BY b.name ASC, c.name ASC, d.name ASC, a.number, a.name ASC");
+                b.name as division_name,
+                c.name as departement_name,
+                d.name as departement_sub_name,
+                d.type,
+                f.id as contract_id,
+                f.name as `contract_name`,
+                g.name as position_name,
+                g.level,
+                i.id as group_id,
+                i.name as group_name,
+                i.calculate as group_calculate,
+                n.name as shift_name,
+                l.name as shift_name_2,
+                l.days,
+                p.amount as salary,
+                p.bpjs,
+                q.number as marital,
+                q.ter_type,
+                a.tax_id,
+                r.request_date,
+                r.resign_date,
+                r.status_resign,
+                CASE 
+                    WHEN r.employee_id IS NOT NULL THEN 'Resign'
+                    ELSE 'Active'
+                END AS status_karyawan
+            FROM employees a
+            JOIN divisions b ON a.division_id = b.id
+            JOIN departements c ON a.departement_id = c.id
+            JOIN departement_subs d ON a.departement_sub_id = d.id
+            LEFT JOIN contracts f ON a.contract_id = f.id
+            LEFT JOIN positions g ON a.position_id = g.id
+            LEFT JOIN groups i ON a.group_id = i.id
+            LEFT JOIN shift_employees k ON a.id = k.employee_id
+            LEFT JOIN shifts n ON k.shift_id = n.id
+            LEFT JOIN shift_details l ON n.id = l.shift_id
+            JOIN setup_salaries p ON p.employee_id = a.id
+            LEFT JOIN maritals q ON a.marital_id = q.id
+            JOIN privilege_groups m ON (i.id = m.group_id or m.group_id is null or m.group_id = '') and m.username = '$username' and m.status = '1'
+            -- LEFT JOIN ke tabel resignations
+            LEFT JOIN resignations r ON a.id = r.employee_id and r.status=0
+            WHERE a.deleted = 0 and a.status = 0
+            -- Filter untuk mengecualikan status UN PROCEDURE (tetap menampilkan yang bukan UN PROCEDURE atau yang NULL/belum resign)
+            AND (r.status_resign IS NULL OR r.status_resign != 'UN PROCEDURE')
+            AND a.division_id LIKE '%$filter_division%'
+            AND a.departement_id LIKE '%$filter_departement%'
+            AND a.departement_sub_id LIKE '%$filter_departement_sub%'
+            AND a.contract_id LIKE '%$filter_employee_type%'
+            AND a.id LIKE '%$filter_employee%'
+            AND a.group_id LIKE '%$filter_group%'
+            GROUP BY a.id
+            ORDER BY b.name ASC, c.name ASC, d.name ASC, a.number, a.name ASC");
             $records = $query->result_array();
 
             $datas = array();
@@ -608,7 +641,14 @@ class Payrolls extends CI_Controller
             }
 
             //Total Masuk kerja
-            $masuk = @$wd;
+            $masuk = @$wd + @$arr_total_permit_absence_no;
+
+            //Perhitungan Salary (Gaji Pokok)
+            if (strtolower(@$record['status_karyawan']) == 'resign') {
+                $salary_employee = ($hkw > 0) ? round(($record['salary'] / $hkw) * $masuk) : 0;
+            } else {
+                $salary_employee = $record['salary'];
+            }
 
             //Allowances / Tunjangan kerja
             $q_allowance = $this->db->query("SELECT b.number, b.name, coalesce(a.amount, 0) as amount, b.calculate_days, b.type
@@ -624,14 +664,25 @@ class Payrolls extends CI_Controller
             $arr_allowance_amount_number = 0;
             $count_allowance_number = 0;
             foreach ($r_allowance as $allowance_data) {
-                if ($allowance_data['calculate_days'] == "1") {
+                if (strtolower(@$record['status_karyawan']) == 'resign') {
+                        if ($allowance_data['calculate_days'] == "1") {
+                            $calculated_amount = round($allowance_data['amount'] * $masuk);
+                        } else {
+                            $calculated_amount = ($hkw > 0) ? round(($allowance_data['amount'] / $hkw) * $masuk) : 0;
+                        }
                     $arr_allowance_number .= strtolower($allowance_data['number']) . ",";
-                    $arr_allowance_amount .= ($allowance_data['amount'] * $hkw) . ",";
-                    $arr_allowance_amount_total += ($allowance_data['amount'] * $hkw);
+                    $arr_allowance_amount .= $calculated_amount . ",";
+                    $arr_allowance_amount_total += $calculated_amount;
                 } else {
-                    $arr_allowance_number .= strtolower($allowance_data['number']) . ",";
-                    $arr_allowance_amount .= $allowance_data['amount'] . ",";
-                    $arr_allowance_amount_total += $allowance_data['amount'];
+                    if ($allowance_data['calculate_days'] == "1") {
+                        $arr_allowance_number .= strtolower($allowance_data['number']) . ",";
+                        $arr_allowance_amount .= ($allowance_data['amount'] * $hkw) . ",";
+                        $arr_allowance_amount_total += ($allowance_data['amount'] * $hkw);
+                    } else {
+                        $arr_allowance_number .= strtolower($allowance_data['number']) . ",";
+                        $arr_allowance_amount .= $allowance_data['amount'] . ",";
+                        $arr_allowance_amount_total += $allowance_data['amount'];
+                    }
                 }
 
                 if ($allowance_data['type'] == "TEMPORARY" && $allowance_data['amount'] > 0) {
@@ -973,14 +1024,24 @@ class Payrolls extends CI_Controller
                 $absence_amount = round((($record['salary'] + $arr_allowance_amount_total) / $hkw) * $absence_qty_final);
             }
 
+            if (strtolower(@$record['status_karyawan']) == 'resign') {
+                
+                $from_resign = new DateTime(date('Y-m-d', strtotime($record['resign_date'])));
+                $filter_to_payroll = new DateTime(date('Y-m-d', strtotime($filter_to)));
+                $absence_qty_deduction = $absence_qty_final - ($from_resign->diff($filter_to_payroll)->days-1);
+                $absence_amount = round(($arr_allowance_amount_number / $hkw) * $absence_qty_deduction);
+            } else {
+                $absence_qty_deduction = $absence_qty_final;
+            }
+
             //Total Pendapatan Gaji (Gaji + Tunjangan + BPJS dari perusahaan + Koreksi plus + lembur hari biasa + lembur hari libur)
-            $total_all_allowance = ($record['salary'] + $arr_allowance_amount_total + $arr_bpjs_com_amount_total + @$correction_plus_amount + $total_overtime_amount);
-            $total_all_allowance_ter = ($record['salary'] + $arr_allowance_amount_total + $arr_bpjs_com_amount_total_ter + @$correction_plus_amount + $total_overtime_amount);
+            $total_all_allowance = ($salary_employee + $arr_allowance_amount_total + $arr_bpjs_com_amount_total + @$correction_plus_amount + $total_overtime_amount);
+            $total_all_allowance_ter = ($salary_employee + $arr_allowance_amount_total + $arr_bpjs_com_amount_total_ter + @$correction_plus_amount + $total_overtime_amount);
 
             //Total Potongan Gaji (Ijin/Sakit + Koreksi Minus + alpha)
             $total_all_deduction = ($arr_permit_type_amount_b_total + @$correction_minus_amount + $absence_amount);
             $income = ($total_all_allowance - $total_all_deduction - $arr_bpjs_com_amount_total);
-            $income_pajak = ($record['salary'] + $arr_allowance_amount_total);
+            $income_pajak = ($salary_employee + $arr_allowance_amount_total);
 
             //Menghitung PPH Jabatan (Income + JKK + JKM + KES x 5%)
             $pph_position = ((($income_pajak + $arr_bpjs_com_amount_salary_total) * $config[0]->payroll_pph_position) / 100);
@@ -1067,7 +1128,7 @@ class Payrolls extends CI_Controller
                 "attandance" => json_encode($arr_permit_combine),
                 "attandance_wd" => ($masuk),
                 "working_day" => $hkw,
-                "salary" => $record['salary'],
+                "salary" =>  $salary_employee,
                 "allowence" => json_encode($arr_allowance_combine),
                 "bpjs_company" => json_encode($arr_bpjs_com_combine),
                 "bpjs_company_total" => $arr_bpjs_com_amount_total,
@@ -1087,7 +1148,7 @@ class Payrolls extends CI_Controller
                 "total_all_allowance" => $total_all_allowance,
                 "deduction_number" => json_encode($arr_permit_type_combine_b),
                 "deduction_amount" => json_encode($arr_permit_type_combine),
-                "deduction_absence" => ($absence_qty_final),
+                "deduction_absence" => ($absence_qty_deduction),
                 "deduction_absence_amount" => $absence_amount,
                 "correction_minus" => @$correction_minus_amount,
                 "total_all_deduction" => $total_all_deduction,
@@ -1218,11 +1279,20 @@ class Payrolls extends CI_Controller
         $period_start = date("Y-m", strtotime($filter_from));
         $period_end = date("Y-m", strtotime($filter_to));
 
-        $query = $this->db->query("SELECT a.*, b.national_id, d.name as source_name, e.ter as ter_persentase FROM payrolls a
+        $query = $this->db->query("SELECT a.*, b.national_id, d.name as source_name, e.ter as ter_persentase,
+                r.request_date,
+                r.resign_date,
+                r.status_resign,
+                CASE 
+                    WHEN r.employee_id IS NOT NULL THEN 'Resign'
+                    ELSE 'Active'
+                END AS status_karyawan
+        FROM payrolls a
                 JOIN employees b on a.employee_id = b.id
                 LEFT JOIN sources d on b.source_id = d.id
                 LEFT JOIN marital_categories e ON a.ter_number = e.number
                 JOIN privilege_groups c ON b.group_id = c.group_id and c.username = '$username' and c.status = '1'
+                LEFT JOIN resignations r ON a.employee_id = r.employee_id and r.status = 0
                 WHERE a.period_start = '$period_start' 
                 AND a.period_end = '$period_end'
                 AND b.division_id LIKE '%$filter_division%'
@@ -1272,6 +1342,7 @@ class Payrolls extends CI_Controller
                 <th rowspan="2" width="20">No</th>
                 <th rowspan="2">Employee ID</th>
                 <th rowspan="2">Employee Name</th>
+                <th rowspan="2">Employee Status</th>
                 <th rowspan="2">Division</th>
                 <th rowspan="2">Departement</th>
                 <th rowspan="2">Departement Sub</th>
@@ -1349,10 +1420,22 @@ class Payrolls extends CI_Controller
 
         $no = 1;
         foreach ($records as $record) {
+
+            if(strtolower($record['status_karyawan']) == "resign"){
+                $status = "<font color='red'>RESIGN</font>";
+            }else{
+                if($record['status'] == "0"){
+                    $status = "ACTIVE";
+                }else{
+                    $status = "INACTIVE";
+                }
+            }
+
             $html .= '<tr>
                     <td>' . $no . '</td>
                     <td class="str">' . $record['number'] . '</td>
                     <td>' . $record['name'] . '</td>
+                    <td>' . $record['status_karyawan'] . '</td>
                     <td>' . $record['division_name'] . '</td>
                     <td>' . $record['departement_name'] . '</td>
                     <td>' . $record['departement_sub_name'] . '</td>
@@ -1448,11 +1531,19 @@ class Payrolls extends CI_Controller
         $period_start = date("Y-m", strtotime($filter_from));
         $period_end = date("Y-m", strtotime($filter_to));
 
-        $query = $this->db->query("SELECT a.*, b.national_id, d.name as source_name, e.ter as ter_persentase
+        $query = $this->db->query("SELECT a.*, b.national_id, d.name as source_name, e.ter as ter_persentase,
+                r.request_date,
+                r.resign_date,
+                r.status_resign,
+                CASE 
+                    WHEN r.employee_id IS NOT NULL THEN 'Resign'
+                    ELSE 'Active'
+                END AS status_karyawan
                 FROM payrolls a
                 JOIN employees b on a.employee_id = b.id
                 LEFT JOIN sources d on b.source_id = d.id
                 LEFT JOIN marital_categories e ON a.ter_number = e.number
+                LEFT JOIN resignations r ON a.employee_id = r.employee_id and r.status = 0
                 JOIN privilege_groups c ON b.group_id = c.group_id and c.username = '$username' and c.status = '1'
                 WHERE a.period_start = '$period_start' 
                 AND a.period_end = '$period_end'
@@ -1624,11 +1715,16 @@ class Payrolls extends CI_Controller
                 $bpjsTotal = ($record['salary'] + $total_tunjangan_tetap);
             }
 
-            if($record['status'] == "0"){
-                $status = "ACTIVE";
+            if(strtolower($record['status_karyawan']) == "resign"){
+                $status = "<font color='red'>RESIGN</font>";
             }else{
-                $status = "INACTIVE";
+                if($record['status'] == "0"){
+                    $status = "ACTIVE";
+                }else{
+                    $status = "INACTIVE";
+                }
             }
+            
 
             $html .= '<tr>
                     <td>' . $no . '</td>

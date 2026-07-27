@@ -684,6 +684,8 @@
             "&filter_idm=" + filter_idm +
             "&filter_approval=" + filter_approval;
 
+        $("#table_name").textbox('setValue', 'cash_carry');
+
         $('#dg').datagrid({
             url: '<?= base_url('attandance/cash_carry/datatables') ?>' + url
         });
@@ -802,27 +804,23 @@
                                     },
                                     dataType: "json",
                                     success: function(result) {
-                                        //Swal.close();
+                                        $('#dlg_insert').dialog('close');
+                                        Swal.close();
+                                        Swal.fire({
+                                            title: result.message,
+                                            icon: "success",
+                                            confirmButtonText: 'Ok',
+                                            allowOutsideClick: false,
+                                        }).then((result) => {
+                                            if (result.isConfirmed) {
+                                                $('#dg').datagrid('reload');
+                                            }
+                                        });
                                     }
                                 });
                             }
                         }
 
-                        setTimeout(function() {
-                            Swal.close();
-                            Swal.fire({
-                                title: "Save Cash Carry Success",
-                                icon: "success",
-                                confirmButtonText: 'Ok',
-                                allowOutsideClick: false,
-                            }).then((result) => {
-                                if (result.isConfirmed) {
-                                    $('#dg').datagrid('reload');
-                                }
-                            });
-                        }, 5000);
-
-                        $('#dlg_insert').dialog('close');
                     } else {
                         toastr.info("Please complete your cash carry data");
                     }

@@ -4,6 +4,7 @@
         <tr>
             <th data-options="field:'number',width:150,halign:'center'">Employee ID</th>
             <th data-options="field:'name',width:250,halign:'center'">Employee Name</th>
+            <th data-options="field:'status_karyawan',width:150,halign:'center'">Employee Status</th>
         </tr>
     </thead>
     <thead>
