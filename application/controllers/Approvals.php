@@ -26,12 +26,18 @@ class Approvals extends CI_Controller
             $id = $data->id;
             $user = $this->crud->read('users', [], ["username" => $data->created_by]);
             $dept_id = @$user->departement_id;
-            $where_dept = "(departement_id = '$dept_id' OR departement_id = '-' OR departement_id = '' OR departement_id IS NULL)";
            
-            $approval = $this->crud->read('approvals', [], [
-                "table_name" => $table_name, 
-                $where_dept
-            ]);
+            $this->db->select('a.*');
+            $this->db->from('approvals a');
+            $this->db->where('a.table_name', $table_name);
+            $this->db->group_start();
+            $this->db->where('a.departement_id', $dept_id);
+            $this->db->or_where('a.departement_id', '-');
+            $this->db->or_where('a.departement_id', '');
+            $this->db->or_where('a.departement_id IS NULL', null, false);
+            $this->db->group_end();
+            
+            $approval = $this->db->get()->row();
             
             
             
@@ -104,12 +110,18 @@ class Approvals extends CI_Controller
         $data = $this->crud->read($tablename, [], ["id" => $id]);
         $user = $this->crud->read('users', [], ["username" => $data->created_by]);
         $dept_id = @$user->departement_id;
-        $where_dept = "(departement_id = '$dept_id' OR departement_id = '-' OR departement_id = '' OR departement_id IS NULL)";
 
-        $approval = $this->crud->read('approvals', [], [
-            "table_name" => $tablename, 
-            $where_dept // String kondisi kompleks ditaruh di sini
-        ]);
+        $this->db->select('a.*');
+        $this->db->from('approvals a');
+        $this->db->where('a.table_name', $tablename);
+        $this->db->group_start();
+        $this->db->where('a.departement_id', $dept_id);
+        $this->db->or_where('a.departement_id', '-');
+        $this->db->or_where('a.departement_id', '');
+        $this->db->or_where('a.departement_id IS NULL', null, false);
+        $this->db->group_end();
+        
+        $approval = $this->db->get()->row();
 
         if ($data->approved == 1) {
             $users_id = @$approval->user_approval_2;

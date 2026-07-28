@@ -1552,6 +1552,7 @@
 					id: id,
 					tablename: tablename
 				}, function(result) {
+					
 					var result = eval('(' + result + ')');
 					if (result.theme == "success") {
 						toastr.success(result.message, result.title);

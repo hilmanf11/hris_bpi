@@ -355,7 +355,6 @@
                         },
                         success: function(result) {
                             var result = eval('(' + result + ')');
-                            console.log(url_save);
 
                             if (result.theme == "success") {
                                 toastr.success(result.message, result.title);
