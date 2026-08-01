@@ -139,8 +139,10 @@ class Payrolls extends CI_Controller
                     $total_income = ($record['salary'] + $allowance_fix_total + $record['total_overtime_amount'] + $record['correction_plus']);
                     $total_deduction = ($record['deduction_absence_amount'] + $total_deduction_amount + $deduction_total + $record['loan_bank'] + $record['loan_cooperative'] + $record['loan_other'] + $record['correction_minus']);
 
+                    $date_start = $record['period_start'];
+                    $date_end = $record['period_end'];
+
                     $datas[] = array(
-                        // "period" => $record['period_start'],
                         "period" => $record['period_end'],
                         "cutoff" => date("d F Y", strtotime($filter_from)) . " to " . date("d F Y", strtotime($filter_to)),
                         "basic_salary" => (int) $record['salary'],
@@ -181,5 +183,97 @@ class Payrolls extends CI_Controller
         $post = isset($_POST['q']) ? $_POST['q'] : "";
 
         echo json_encode($send);
+    }
+
+    public function reads_v2($api_key = "", $year = "")
+    {
+        if ($api_key != "") {
+            $user = $this->mobile->read("users", [], ["api_key" => $api_key]);
+
+            if($year === "") {
+                show_error("Year is Empty");
+                return;
+            }
+
+            if ($user) {
+                $employee = $this->mobile->read("employees", [], ["number" => $user->number]);
+
+                $this->db->select('a.*, b.bank_branch, b.bank_no, b.national_id, b.tax_id, d.name as source_name, c.name as marital_name');
+                $this->db->from('payrolls a');
+                $this->db->join('employees b', 'a.employee_id = b.id');
+                $this->db->join('maritals c', 'a.marital = c.number', 'left');
+                $this->db->join('sources d', 'b.source_id = d.id', 'left');
+                $this->db->like('b.id', $employee->id);
+                $this->db->where("a.approved_to is null or a.approved_to = ''");
+                $this->db->where("a.period_start LIKE '$year%'");
+                $this->db->order_by('a.period_start', 'DESC');
+                $this->db->group_by('a.employee_id');
+                $records = $this->db->get()->result_array();
+
+                $allowance_fix_total = 0;
+                $total_deduction_amount = 0;
+                $datas = array();
+                foreach ($records as $record) {
+                    $cutoff = $this->mobile->read('cutoff', ["start" => $record['period_start'], "finish" => $record['period_end']]);
+                    $filter_from = @$cutoff->start;
+                    $filter_to = @$cutoff->finish;
+                    
+                    //Allowences FIX =============================================================
+                    $allowance_fixs = $this->mobile->query("SELECT b.type, b.name, SUM(a.amount) as amount
+                        FROM allowances b
+                        JOIN setup_allowances a ON a.allowance_id = b.id
+                        WHERE a.employee_id = '$record[employee_id]' and b.type = 'FIX'
+                        GROUP BY b.id ORDER BY b.type asc");
+
+                    $allowance_fix_total = 0;
+                    foreach ($allowance_fixs as $allowance_fix) {
+                        $allowance_fix_total += $allowance_fix->amount;
+                    }
+
+                    //Deduction ==================================================================
+                    $deductions = $this->mobile->query("SELECT b.number, b.name, SUM(a.amount) as amount
+                        FROM deductions b
+                        LEFT JOIN setup_deductions a ON a.deduction_id = b.id
+                        WHERE a.employee_id = '$record[employee_id]'
+                        GROUP BY b.number, b.name ORDER BY b.name asc");
+
+                    $deduction_total = 0;
+                    foreach ($deductions as $deduction) {
+                        $deduction_total += $deduction->amount;
+                    }
+
+                    $total_income = ($record['salary'] + $allowance_fix_total + $record['total_overtime_amount'] + $record['correction_plus']);
+                    $total_deduction = ($record['deduction_absence_amount'] + $total_deduction_amount + $deduction_total + $record['loan_bank'] + $record['loan_cooperative'] + $record['loan_other'] + $record['correction_minus']);
+
+                    $date_start = $record['period_start'];
+                    $date_end = $record['period_end'];
+
+                    $datas[] = array(
+                        "employee_name" => $record['name'],
+                        "period" => date("F Y", strtotime($filter_to)),
+                        "date_start" => "$date_start-16",
+                        "date_end" => "$date_end-15",
+                        "cutoff" => date("d F Y", strtotime($filter_from)) . " to " . date("d F Y", strtotime($filter_to)),
+                        "basic_salary" => (int) $record['salary'],
+                        "income" => ($total_income - $total_deduction),
+                    );
+                }
+
+                die(json_encode(array(
+                    "title" => "Success",
+                    "message" => "Data Found",
+                    "theme" => "success",
+                    "results" => $datas
+                )));
+            } else {
+                show_error("Api Key Invalid");
+            }
+        } else {
+            show_error("Cannot Process your request");
+        }
+
+        // $post = isset($_POST['q']) ? $_POST['q'] : "";
+
+        // echo json_encode($send);
     }
 }
