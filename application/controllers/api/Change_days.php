@@ -100,6 +100,11 @@ class Change_days extends CI_Controller
                     $approval = $this->mobile->read("approvals", [], ["departement_id" => $employee->departement_id, "table_name" => "change_days"]);
                     // $approvalUser = $this->mobile->read("users", [], ["username" => $approval->user_approval_1]);
 
+                    if($approval === null){
+                        show_error("Approval Not Found, Please Contact Your Administrator for setting approval change days.");
+                        return;
+                    }
+
                     $employee_id = $employee->id;
                     $request_code = $this->requestCode($post['start']);
                     $start = $post['start'];
@@ -128,9 +133,26 @@ class Change_days extends CI_Controller
                             $send = $this->db->update("change_days", $values, ["employee_id" => $employee_id, "request_code" => $request_code]);
 
                             if($send){
+                                // ambil apiKey berdasarkan user_approval_1
+                                $user_approval = $this->mobile->read('users', [], ["username" => $approval->user_approval_1]);
+                                if($user_approval) {
+                                    $this->apps = $this->load->database('apps', TRUE);
+                                    //ambil data ke db hris mobile
+                                    $this->apps->select("*");
+                                    $this->apps->from('users');
+                                    $this->apps->where('api_key', $user_approval->api_key);
+                                    $this->apps->limit(1);
+
+                                    $userM = $this->apps->get()->row();
+
+                                    $message = "Sent a request to approve data Change Day";
+
+                                    $this->mobile->pushNotification($userM->token, $user_approval->name, $message);
+                                }
+
                                 die(json_encode(array(
                                     "title" => "Success",
-                                    "message" => "Change Days Success Send",
+                                    "message" => "Change Day Success Send",
                                     "theme" => "success",
                                 )));
                             } else {
