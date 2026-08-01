@@ -63,4 +63,37 @@ class Change_password extends CI_Controller
             show_error("Cannot Process your request");
         }
     }
+
+    // change password new
+    public function update($api_key)
+    {
+
+        $this->apps = $this->load->database('apps', TRUE);
+        header('Content-Type: application/json; charset=utf-8');
+
+
+        if ($api_key != "") {
+            $user = $this->mobile->read("users", [], ["api_key" => $api_key]);
+
+            if ($user) {
+                $password = $this->input->post('password');
+                $update = $this->db->update("users", ["password" => $password], ["id" => $user->id]);
+
+                $this->apps->where('email', $user->email);
+                $this->apps->update('users', ["password" => $password]);
+
+                if($update){
+                    echo json_encode(array("title" => "Success", "message" => "Change Password Successfully. For verify new password, please Sign In again.", "theme" => "success"));
+                }else{
+                    echo json_encode(array("title" => "Failed", "message" => "Change Password Failed", "theme" => "failed"));
+                }
+            } else {
+                show_error("Api Key Invalid");
+            }
+        } else {
+            show_error("Cannot Process your request");
+        }
+    }
+
+
 }
