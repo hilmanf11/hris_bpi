@@ -170,6 +170,102 @@ class Dashboard extends CI_Controller
         }
     }
 
+    public function dayOffV2($api_key = "")
+    {
+        $this->output->delete_cache();
+        if (!empty($api_key)) {
+            $user = $this->mobile->read("users", [], ["api_key" => $api_key]);
+            $today = date("Y-m-d");
+            $departement_id = @$user->departement_id;
+            
+            if ($user) {
+                $employees = $this->mobile->query("SELECT * FROM employees WHERE departement_id = '$departement_id' and `status` = '0'");
+
+                $datas = array();
+                foreach ($employees as $employee) {
+                    if($employee->api_key == $api_key){
+                        continue; // Skip the current user
+                    }
+
+                    $attandance = $this->mobile->read("attandances", [], ["date_in" => $today, "number" => $employee->number]);
+                    $permit = $this->mobile->read("permits", [], ["permit_date" => $today, "employee_id" => $employee->id]);
+                    $permit_type = $this->mobile->read("permit_types", [], ["id" => @$permit->permit_type_id]);
+
+                    if(!empty($employee->image_profile)){
+                        if(substr($employee->image_profile, -4) == "jpeg"){
+                            $avatar = "assets/image/employee/profile/" . substr($employee->image_profile, -15);
+                        }else{
+                            $avatar = "assets/image/employee/profile/" . substr($employee->image_profile, -14);
+                        }
+                    }else{
+                        $avatar = "assets/image/users/default.png";
+                    }
+
+                    //Shift and Setting Group
+                    $tolerance_hour_min = date("H:i:s", strtotime('-2 Hour', strtotime(@$attandance->time_in)));
+                    $tolerance_hour_plus = date("H:i:s", strtotime('+2 Hour', strtotime(@$attandance->time_in)));
+                    $this->db->select("d.start, d.end, d.days, d.working, d.tolerance, c.name, d.name as shift_name");
+                    $this->db->from('shift_employees b');
+                    $this->db->join('shifts c', 'c.id = b.shift_id');
+                    $this->db->join('shift_details d', 'd.shift_id = c.id');
+                    $this->db->where('b.employee_id', $employee->id);
+                    if (@$attandance->time_in > "23:00:00") {
+                        $this->db->where("d.start >= '$tolerance_hour_min'");
+                    } elseif (@$attandance->time_in != "") {
+                        $this->db->where("d.start >= '$tolerance_hour_min' and d.start <= '$tolerance_hour_plus'");
+                    }
+                    $shift = $this->db->get()->row();
+
+                    if (@$attandance->time_in == null) {
+                        if (@$permit->employee_id != null) {
+                            $attandance_status = @strtoupper($permit_type->name);
+                            $color = "blue";
+                        } else {
+                            $attandance_status = "ABSENCE";
+                            $color = "red";
+                        }
+                    } else {
+                        if (@$shift->start >= @$attandance->time_in) {
+                            $attandance_status = "ON TIME";
+                            $color = "green";
+                        } elseif (@$shift->start == null) {
+                            $attandance_status = "UN SETTING";
+                            $color = "red";
+                        } elseif (@$shift->start <= @$attandance->time_in) {
+                            $attandance_status = "LATE";
+                            $color = "orange";
+                        } else {
+                            $attandance_status = "ERROR";
+                            $color = "red";
+                        }
+                    }
+
+                    if($attandance_status != "ABSENCE"){
+                        $datas[] = array(
+                            "image" => $avatar,
+                            "name" => $employee->name,
+                            "time_in" => @$attandance->time_in,
+                            "time_out" => @$attandance->time_out,
+                            "description" => $attandance_status,
+                            "color" => $color
+                        );
+                    }
+                }
+
+                die(json_encode(array(
+                    "title" => "Success",
+                    "message" => "Data Found",
+                    "theme" => "success",
+                    "results" => $datas
+                )));
+            } else {
+                show_error("Api Key Invalid");
+            }
+        } else {
+            show_error("Cannot Process your request");
+        }
+    }
+
     public function attandanceSummary($api_key = "")
     {
         $this->output->delete_cache();
