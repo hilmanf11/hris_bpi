@@ -93,10 +93,22 @@ class Permits extends CI_Controller
         echo json_encode($send);
     }
 
+    // OLD
     public function readReason($permit_type_id)
     {
         if ($permit_type_id != "") {
-            $send = $this->mobile->reads('reasons', [], ["permit_type_id" => $permit_type_id]);
+            $send = $this->mobile->reads('reasons', [], ["number" => $permit_type_id]);
+            echo json_encode($send);
+        }else{
+            show_error("Cannot Process your request");
+        }
+    }
+
+    // UBAH JADI NUMBER
+    public function readReasonV2($number)
+    {
+        if ($number != "") {
+            $send = $this->mobile->reads('reasons', ["number" => $number]);
             echo json_encode($send);
         }else{
             show_error("Cannot Process your request");
@@ -195,11 +207,28 @@ class Permits extends CI_Controller
                                     $send = $this->db->update("permits", $values, ["employee_id" => $employee->id, "permit_type_id" => $post['permit_type_id'], "trans_date" => date("Y-m-d"), "permit_date" => $permit_date]);
 
                                     if($send){
+                                        // ambil apiKey berdasarkan user_approval_1
+                                        $user_approval = $this->mobile->read('users', [], ["username" => $approval->user_approval_1]);
+                                        if($user_approval) {
+                                            //load db
+                                            $this->apps = $this->load->database('apps', TRUE);
+                                            //ambil data ke db hris mobile
+                                            $this->apps->select("*");
+                                            $this->apps->from('users');
+                                            $this->apps->where('api_key', $user_approval->api_key);
+                                            $this->apps->limit(1);
+
+                                            $userM = $this->apps->get()->row();
+
+                                            $message = "Sent a request to approve data Permit";
+
+                                            $this->mobile->pushNotification($userM->token, $user_approval->name, $message);
+                                        }
+
                                         die(json_encode(array(
                                             "title" => "Success",
                                             "message" => "Permit Success Send",
                                             "theme" => "success",
-                                            "result" => $approval,
                                         )));
                                     } else {
                                         show_error("Permit Failed To Send");
