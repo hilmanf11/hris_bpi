@@ -469,6 +469,23 @@ class Overtimes extends CI_Controller
                             $send = $this->db->update("cash_carries", $values, ["employee_id" => $employee_id, "trans_date" =>  $trans_date]);
 
                             if($send){
+                                // ambil apiKey berdasarkan user_approval_1
+                                $user_approval = $this->mobile->read('users', [], ["username" => $approval->user_approval_1]);
+                                if($user_approval) {
+                                    $this->apps = $this->load->database('apps', TRUE);
+                                    //ambil data ke db hris mobile
+                                    $this->apps->select("*");
+                                    $this->apps->from('users');
+                                    $this->apps->where('api_key', $user_approval->api_key);
+                                    $this->apps->limit(1);
+
+                                    $userM = $this->apps->get()->row();
+
+                                    $message = "Sent a request to approve data Overtime";
+
+                                    $this->mobile->pushNotification($userM->token, $user_approval->name, $message);
+                                }
+
                                 die(json_encode(array(
                                     "title" => "Success",
                                     "message" => "Overtime Success Send",
@@ -510,6 +527,215 @@ class Overtimes extends CI_Controller
                 show_error("Api Key Invalid");
             }
         }else{
+            show_error("Cannot Process your request");
+        }
+    }
+
+    // cek apakah ada data yang dicari?
+    // FUNGSINYA UNTUK CHECK APAKAH HARI INI TERMASUK HARI KERJA?
+    public function checkOvertime($date, $days, $is_harian = null)
+    {
+        // 1. Cek holiday di calendar
+        $this->db->select('description, permit');
+        $this->db->from('calendars');
+        $this->db->where('trans_date', $date);
+        $holiday = $this->db->get()->row();
+
+        if ($is_harian && @$holiday->permit == 1) {
+            return 'WORK';
+        }
+        // Jika ada di calendar → FULL
+        if ($holiday) {
+            return 'FULL';
+        }
+
+        $dayOfWeek = date('N', strtotime($date));
+        return ($dayOfWeek > $days) ? 'FULL' : 'WORK';
+    }
+
+    public function overtimeSummary($api_key = "")
+    {
+
+        if ($api_key != "") {
+            $user = $this->mobile->read("users", [], ["api_key" => $api_key]);
+
+            if ($user) {
+                $trans_date = $this->input->post("trans_date");
+                $employee = $this->mobile->read("employees", [], ["number" => $user->number]);
+
+                $trans_date = $this->input->post("trans_date");
+
+                // Tentukan weekend atau weekday
+                $isWeekend = date('N', strtotime($trans_date)) >= 6;
+
+                // Ambil working type berdasarkan hari
+                $workingType = $isWeekend ? "WEEKEND" : "WEEKDAY";
+
+
+                $this->db->select("d.start, d.end, d.days, d.name as shift_name");
+                $this->db->from('shift_employees b');
+                $this->db->join('shifts c', 'c.id = b.shift_id');
+                $this->db->join('shift_details d', 'd.shift_id = c.id');
+                $this->db->where('b.employee_id', $employee->id);
+                $this->db->where('d.working', $workingType);
+                $shift = $this->db->get()->row();
+
+                // jika ga menemukan weekend di shift maka masuk sini
+                if (!$shift && $isWeekend) {
+                    $this->db->select("d.start, d.end, d.days, d.name as shift_name");
+                    $this->db->from('shift_employees b');
+                    $this->db->join('shifts c', 'c.id = b.shift_id');
+                    $this->db->join('shift_details d', 'd.shift_id = c.id');
+                    $this->db->where('b.employee_id', $employee->id);
+                    $this->db->where('d.working', "WEEKDAY");
+                    $shift = $this->db->get()->row();
+                }
+
+                $this->db->select("date_in, time_in, time_out, shift_start, shift_end");
+                $this->db->from('attandances');
+                $this->db->where("date_in", $trans_date);
+                $this->db->where('number', $user->number);
+                $attandance = $this->db->get()->row();
+
+                if (empty($attandance)) {
+                    die(json_encode(array(
+                        "title" => "Attendance",
+                        "message" => "Attendance not found. Manually input form for request Overtime.",
+                        "theme" => "error",
+                        "results" => [
+                            "day" => date('l', strtotime($trans_date)),
+                            "date_time" => $trans_date,
+                            "shift_name" => @$shift->shift_name,
+                            "shift_start" => @$shift->start,
+                            "shift_end" => @$shift->end,
+                            "time_in" => @$attandance->time_in,
+                            "time_out" => @$attandance->time_out,
+                            "plan" => 0,
+                            "actual" => 0,
+                            "breaks" => 0,
+                            "type_overtime" => null,
+                        ],
+                    )));
+                } else {
+
+                    if($attandance->time_out == null) {
+                        die(json_encode(array(
+                            "title" => "Attendance",
+                            "message" => "Attendance found. but data not complete. Manually input form for request Overtime.",
+                            "theme" => "success",
+                            "results" => [
+                                "day" => date('l', strtotime($trans_date)),
+                                "date_time" => $trans_date,
+                                "shift_name" => @$shift->shift_name,
+                                "shift_start" => @$shift->start,
+                                "shift_end" => @$shift->end,
+                                "time_in" => @$attandance->time_in,
+                                "time_out" => @$attandance->time_out,
+                                "plan" => 0,
+                                "actual" => 0,
+                                "breaks" => 0,
+                                "type_overtime" => null,
+                            ],
+                        )));
+                    }
+
+
+
+                    // $group_harian = ["20221213000002", "20221213000003"];
+                    // $is_harian = in_array($employee->group_id, $group_harian);
+                    // $dayType = $this->checkOvertime($trans_date, $shift->days, $is_harian);
+                    $dayType = $this->checkOvertime($trans_date, $shift->days, false);
+
+                    $shift_start = $shift->start;
+                    $shift_end = $shift->end;
+                    $time_in = $attandance->time_in;
+                    $time_out = $attandance->time_out;
+
+                    $startDate = $trans_date;
+                    $endDate = $trans_date;
+
+                    // Jika jam pulang lebih kecil dari jam masuk → berarti lewat tengah malam
+                    if (strtotime($time_out) < strtotime($time_in)) {
+                        $endDate = date("Y-m-d", strtotime("$startDate +1 day"));
+                    }
+
+                    $ts_time_in = strtotime("$startDate $time_in");
+                    $ts_time_out = strtotime("$endDate $time_out");
+                    $ts_shift_start = strtotime("$startDate $shift_start");
+                    $ts_shift_end = strtotime("$startDate $shift_end");
+
+                    // Shift end juga harus disesuaikan tanggalnya seperti time_out
+                    if (strtotime($shift_end) < strtotime($shift_start)) {
+                        $ts_shift_end = strtotime("$endDate $shift_end");
+                    }
+
+                    if ($dayType == "FULL") {
+
+                        $total_hours = ($ts_time_out - $ts_time_in) / 3600;
+                        $overtime_plan = floor($total_hours);
+
+                        $breaks = floor($overtime_plan / 4);
+                        $overtime_actual = $overtime_plan - $breaks;
+
+                        $info_overtime = "FULL";
+                    } else {
+
+                        // Selisih menit dari shift selesai sampai checkout
+                        $overtime_minutes = max(0, ($ts_time_out - $ts_shift_end) / 60);
+
+                        // Plan
+                        $overtime_plan = floor($overtime_minutes / 60);
+                        if (($overtime_minutes % 60) >= 30) {
+                            $overtime_plan++;
+                        }
+
+                        // Actual (sama dengan plan sebelum dipotong break)
+                        $overtime_actual = $overtime_plan;
+
+                        // Break 1 jam setiap 4 jam
+                        $breaks = floor($overtime_actual / 4);
+                        $overtime_actual -= $breaks;
+
+                        $info_overtime = "WORK";
+                    }
+
+                    // // dalam jam
+                    // $overtime_plan = floor($total_overtime_minutes / 30);
+
+                    // // Hitung breaks
+                    // $breaks = floor($overtime_plan / 4);
+
+                    // // htiung actual
+                    // $overtime_actual = $overtime_plan - $breaks;
+
+
+                    die(json_encode(array(
+                        "title" => "Success",
+                        "message" => "Attendance found",
+                        "theme" => "success",
+                        "results" => [
+                            "day" => date('l', strtotime($trans_date)),
+                            "date_time" => $trans_date,
+                            "shift_name" => $shift->shift_name,
+                            "shift_start" => $shift->start,
+                            "shift_end" => $shift->end,
+                            "time_in" => $attandance->time_in, // checkin
+                            "time_out" => $attandance->time_out, // check out
+                            "plan" => $overtime_plan,
+                            "actual" => $overtime_actual,
+                            "breaks" => $breaks,
+                            "type_overtime" => $info_overtime,
+                        ],
+                    )));
+                }
+
+                // die(json_encode(array(
+                //     "date_time" => $attandance,
+                // )));
+            } else {
+                show_error("Api Key Invalid");
+            }
+        } else {
             show_error("Cannot Process your request");
         }
     }
