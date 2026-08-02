@@ -204,8 +204,8 @@ class Payrolls extends CI_Controller
                 $this->db->join('maritals c', 'a.marital = c.number', 'left');
                 $this->db->join('sources d', 'b.source_id = d.id', 'left');
                 $this->db->like('b.id', $employee->id);
-                $this->db->where("a.approved_to is null or a.approved_to = ''");
-                $this->db->where("a.period_start LIKE '$year%'");
+                $this->db->where("(a.approved_to is null or a.approved_to = '') and a.period_start LIKE '$year%'");
+                // $this->db->where("a.period_start LIKE '$year%'");
                 $this->db->order_by('a.period_start', 'DESC');
                 $this->db->group_by('a.employee_id');
                 $records = $this->db->get()->result_array();
