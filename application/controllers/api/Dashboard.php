@@ -23,14 +23,89 @@ class Dashboard extends CI_Controller
         show_error("Cannot Process your request");
     }
 
+    public function settingFeatures() 
+    {
+        $version = "1.0.1";
+        $data = [
+            "is_attendance" => 'Y',
+            "is_overtime" => 'Y',
+            "is_add_overtime" => 'N',
+            "is_cancel_overtime" => 'N',
+            "is_change_days" => 'Y',
+            "is_add_change_days" => 'N',
+            "is_cancel_change_days" => 'N',
+            "is_permits" => 'Y',
+            "is_add_permit" => 'Y',
+            "is_cancel_permit" => 'Y',
+            "version" => $version,
+            "link" => "https://bpi.astechno.net/hris-bpi/",
+            // kondisi jika versi nya berbeda
+            "info" => "Versi terbaru aplikasi tersedia.\nSilakan update ke versi $version untuk melanjutkan."
+        ];
+
+        die(json_encode(array(
+            "title" => "Success",
+            "message" => "Data Found",
+            "theme" => "success",
+            "results" => $data,
+        )));
+    }
+
     public function attendance($api_key = "")
     {
         $this->output->delete_cache();
         if (!empty($api_key)) {
             $user = $this->mobile->read("users", [], ["api_key" => $api_key]);
 
+            $employee = $this->mobile->read("employees", [], ["number" => $user->number]);
+
             if ($user) {
-                $attandances = $this->mobile->read("attandances", [], ["number" => $user->number, "date_in" => date("Y-m-d")], 1, "", "", ["number", "date_in"]);
+                // $attandances = $this->mobile->read("attandances", [], ["number" => $user->number, "date_in" => date("Y-m-d")], 1, "", "", ["number", "date_in"]);
+
+                // Cari attendance yang belum checkout
+                $this->db->from('attandances');
+                $this->db->where('number', $user->number);
+                $this->db->where('time_out IS NULL', null, false);
+                $this->db->order_by('date_in', 'DESC');
+                $this->db->order_by('time_in', 'DESC');
+                $this->db->limit(1);
+                $attandances = $this->db->get()->row();
+
+                // Jika ada attendance yang belum checkout
+                if ($attandances) {
+
+                    // Hitung waktu shift selesai
+                    $shiftEnd = new DateTime($attandances->date_in . ' ' . $attandances->shift_end);
+
+                    // Jika shift melewati tengah malam
+                    if ($attandances->shift_end <= $attandances->shift_start) {
+                        $shiftEnd->modify('+1 day');
+                    }
+
+                    // Tambah toleransi checkout 2 jam
+                    $shiftEnd->modify('+2 hours');
+
+                    $now = new DateTime();
+
+                    // Jika sudah melewati batas checkout
+                    if ($now > $shiftEnd) {
+                        $attandances = null;
+                    }
+                }
+
+                // Kalau tidak ada attendance aktif, ambil attendance hari ini
+                if (!$attandances) {
+                    $attandances = $this->mobile->read(
+                        "attandances", [], ["number" => $user->number, "date_in" => date("Y-m-d")], 1, "", "", ["number", "date_in"]
+                    );
+                }
+
+                $this->db->select("d.start, d.end, d.days, d.working, d.tolerance, c.name, d.name as shift_name");
+                $this->db->from('shift_employees b');
+                $this->db->join('shifts c', 'c.id = b.shift_id');
+                $this->db->join('shift_details d', 'd.shift_id = c.id');
+                $this->db->where('b.employee_id', $employee->id);
+                $shift = $this->db->get()->row();
 
                 if (!empty($attandances->foto_in)) {
                     $folder = date("Ym", strtotime($attandances->date_in));
@@ -51,10 +126,10 @@ class Dashboard extends CI_Controller
                     "message" => "Data Found",
                     "theme" => "success",
                     "results" => array(
-                        "start" => @$attandances->shift_start,
-                        "end" => @$attandances->shift_end,
-                        "shift_name" => @$attandances->shift_name,
-                        "shift_detail" => @$attandances->shift_detail,
+                        "start" => @$shift->start,
+                        "end" => @$shift->end,
+                        "shift_name" => @$shift->shift_name,
+                        "shift_detail" => @$shift->name,
                         "date_in" => @$attandances->date_in,
                         "date_out" => @$attandances->date_out,
                         "time_in" => @$attandances->time_in,
@@ -183,7 +258,7 @@ class Dashboard extends CI_Controller
 
                 $datas = array();
                 foreach ($employees as $employee) {
-                    if($employee->api_key == $api_key){
+                    if($employee->number == $user->number){
                         continue; // Skip the current user
                     }
 
