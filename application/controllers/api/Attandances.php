@@ -235,6 +235,7 @@ class Attandances extends CI_Controller
                                 'time_out' => $post['time_out'],
                                 'foto_out' => @$foto,
                                 'status' => 'MOBILE',
+                                'attandance_type' => 'MOBILE HRIS',
                             );
 
                             if ($this->mobile->update('attandances', ["id" => @$attandance_in->id], $data, $user->username)) {
@@ -271,6 +272,7 @@ class Attandances extends CI_Controller
                                 "shift_detail" => @$shift->name,
                                 "shift_days" => @$shift->days,
                                 'status' => 'MOBILE',
+                                'attandance_type' => 'MOBILE HRIS',
                             );
 
                             if ($this->mobile->create('attandances', $data, $user->username)) {
