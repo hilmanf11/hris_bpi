@@ -208,6 +208,9 @@ class Attandances extends CI_Controller
             $folder = date("Ym");
             $path = 'assets/document/attendance/' . $folder;
 
+            $time_now = date("H:i:s");
+            $date_now = date("Y-m-d");
+
             if (!file_exists($path)) {
                 mkdir($path, 0777, true);
             }
@@ -231,10 +234,10 @@ class Attandances extends CI_Controller
 
                             $data = array(
                                 'number' => $user->number,
-                                'date_out' => $post['date_out'],
-                                'time_out' => $post['time_out'],
+                                'date_out' => $date_now,
+                                'time_out' => $time_now,
                                 'foto_out' => @$foto,
-                                'status' => 'MOBILE',
+                                'status' => $post['source'] ?? 'MOBILE',
                                 'attandance_type' => 'MOBILE HRIS',
                             );
 
@@ -263,15 +266,15 @@ class Attandances extends CI_Controller
 
                             $data = array(
                                 'number' => $user->number,
-                                'date_in' => $post['date_in'],
-                                'time_in' => $post['time_in'],
+                                'date_in' => $date_now,
+                                'time_in' => $time_now,
                                 'foto_in' => @$foto,
                                 "shift_start" => @$shift->start,
                                 "shift_end" => @$shift->end,
                                 "shift_name" => @$shift->shift_name,
                                 "shift_detail" => @$shift->name,
                                 "shift_days" => @$shift->days,
-                                'status' => 'MOBILE',
+                                'status' => $post['source'] ?? 'MOBILE',
                                 'attandance_type' => 'MOBILE HRIS',
                             );
 
