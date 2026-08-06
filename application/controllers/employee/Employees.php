@@ -1437,5 +1437,75 @@ class Employees extends CI_Controller
         <?php
     }
 
+
+    public function generateQRCode_all()
+    {
+        // Ambil semua employee aktif
+        $this->db->select('a.number, a.name');
+        $this->db->from('employees a');
+        $this->db->where('a.status', 0);
+        $this->db->order_by('a.name', 'asc');
+        $employees = $this->db->get()->result();
+
+        if (empty($employees)) {
+            echo json_encode([
+                'status'  => 'error',
+                'message' => 'Tidak ada data employee ditemukan.',
+                'total'   => 0,
+            ]);
+            return;
+        }
+
+        $path        = 'assets/image/qrcode/';
+        $success     = [];
+        $failed      = [];
+
+        foreach ($employees as $a) {
+            try {
+                // Nama file: number_name.png (karakter non-alphanumeric di name diganti _)
+                $safeName    = preg_replace('/[^a-zA-Z0-9]/', '_', $a->name);
+                $filename    = $a->number . '_' . $safeName;
+                $image_name  = $filename . '.png';
+                $savePath    = FCPATH . $path . $image_name;
+
+                // Konfigurasi QR code
+                $config['cacheable'] = true;
+                $config['cachedir']  = './assets/';
+                $config['errorlog']  = './assets/';
+                $config['imagedir']  = $path;
+                $config['quality']   = true;
+                $config['size']      = '1024';
+                $config['black']     = array(224, 255, 255);
+                $config['white']     = array(70, 130, 180);
+                $this->ciqrcode->initialize($config);
+
+                // Data QR code = number karyawan
+                $params['data']     = $a->number;
+                $params['level']    = 'H';
+                $params['size']     = 10;
+                $params['savename'] = $savePath;
+                $this->ciqrcode->generate($params);
+
+                $success[] = $filename;
+            } catch (\Exception $e) {
+                $failed[] = [
+                    'number'  => $a->number,
+                    'name'    => $a->name,
+                    'error'   => $e->getMessage(),
+                ];
+            }
+        }
+
+        echo json_encode([
+            'status'  => 'success',
+            'message' => 'Generate QR Code selesai.',
+            'total'   => count($employees),
+            'success' => count($success),
+            'failed'  => count($failed),
+            'files'   => $success,
+            'errors'  => $failed,
+        ]);
+    }
+
    
 }

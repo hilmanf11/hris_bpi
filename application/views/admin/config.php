@@ -33,6 +33,10 @@
                     <input style="width:60%;" name="longitude" value="<?= $config->longitude ?>" class="easyui-textbox">
                 </div>
                 <div class="fitem">
+                    <span style="width:35%; display:inline-block;">Radius (Meter)</span>
+                    <input style="width:60%;" name="radius" value="<?= $config->radius ?>" class="easyui-numberbox">
+                </div>
+                <div class="fitem">
                     <span style="width:35%; display:inline-block;">Logo</span>
                     <input style="width:60%;" name="logo" class="easyui-filebox">
                 </div>

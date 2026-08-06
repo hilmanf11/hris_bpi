@@ -43,6 +43,20 @@ class Config extends CI_Controller
             $post_final = array_merge($post, ['logo' => @$uploadLogo, 'favicon' => @$uploadFavicon, 'image' => @$uploadLogin]);
             $send = $this->db->update("config", $post_final);
             if ($send) {
+                try {
+                    $apps_db = $this->load->database('apps', TRUE);
+                    if ($apps_db && $apps_db->conn_id) {
+                        $dataAppCompanies = [
+                            "latitude" => $post['latitude'],
+                            "longitude" => $post['longitude'],
+                            "radius" => $post['radius']
+                        ];
+                        $apps_db->update("companies", $dataAppCompanies, ["number" => 'BPLASTIC']);
+                    }
+                } catch (Exception $e) {
+                    log_message('error', 'Mobile database sync error in Admin Config : ' . $e->getMessage());
+                }
+
                 echo json_encode(array("title" => "Good Job", "message" => "Data Updated Successfully", "theme" => "success"));
             } else {
                 echo log_message('error', 'There is an error in your system or data');

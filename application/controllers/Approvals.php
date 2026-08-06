@@ -317,7 +317,7 @@ class Approvals extends CI_Controller
         $this->db->join('users c', 'a.approved_to = c.username');
         $this->db->where('a.approved_to', $this->session->username);
         $this->db->group_by('a.created_by');
-        $cash_carries = $this->db->get()->result_object();
+        $cash_carry = $this->db->get()->result_object();
         
 
         $this->db->select('b.name as fullname, a.approved_to, a.created_by, b.avatar');
@@ -352,7 +352,12 @@ class Approvals extends CI_Controller
         $this->db->group_by('a.created_by');
         $change_days = $this->db->get()->result_object();
 
-        $totalRows = (count($cash_carries) + count($payrolls) + count($setup_salaries) + count($permits) + count($change_days));
+        $totalRows = ((is_array($cash_carries) ? count($cash_carries) : 0) + 
+                      (is_array($cash_carry) ? count($cash_carry) : 0) + 
+                      (is_array($payrolls) ? count($payrolls) : 0) + 
+                      (is_array($setup_salaries) ? count($setup_salaries) : 0) + 
+                      (is_array($permits) ? count($permits) : 0) + 
+                      (is_array($change_days) ? count($change_days) : 0));
         if ($totalRows > 0) {
             echo '<span class="badge">' . $totalRows . '</span>';
         } else {
@@ -416,39 +421,39 @@ class Approvals extends CI_Controller
         $this->db->group_by('a.created_by');
         $change_days = $this->db->get()->result_object();
 
-        if (count($cash_carries) > 0) {
-            foreach ($cash_carries as $cash_carry) {
-                $this->approvalMessage($cash_carry->avatar, $cash_carry->fullname, $cash_carry->approved_to, $cash_carry->created_by, "cash_carries");
+        if (is_array($cash_carries) && count($cash_carries) > 0) {
+            foreach ($cash_carries as $item) {
+                $this->approvalMessage($item->avatar, $item->fullname, $item->approved_to, $item->created_by, "cash_carries");
             }
         }
 
-        if (count($cash_carry) > 0) {
-            foreach ($cash_carry as $cash_carry) {
-                $this->approvalMessage($cash_carry->avatar, $cash_carry->fullname, $cash_carry->approved_to, $cash_carry->created_by, "cash_carry");
+        if (is_array($cash_carry) && count($cash_carry) > 0) {
+            foreach ($cash_carry as $item) {
+                $this->approvalMessage($item->avatar, $item->fullname, $item->approved_to, $item->created_by, "cash_carry");
             }
         }
 
-        if(count($payrolls) > 0) {
-            foreach ($payrolls as $payroll) {
-                $this->approvalMessage($payroll->avatar, $payroll->fullname, $payroll->approved_to, $payroll->created_by, "payrolls");
+        if (is_array($payrolls) && count($payrolls) > 0) {
+            foreach ($payrolls as $item) {
+                $this->approvalMessage($item->avatar, $item->fullname, $item->approved_to, $item->created_by, "payrolls");
             }
         }
 
-        if(count($setup_salaries) > 0) {
-            foreach ($setup_salaries as $setup_salarie) {
-                $this->approvalMessage($setup_salarie->avatar, $setup_salarie->fullname, $setup_salarie->approved_to, $setup_salarie->created_by, "setup_salaries");
+        if (is_array($setup_salaries) && count($setup_salaries) > 0) {
+            foreach ($setup_salaries as $item) {
+                $this->approvalMessage($item->avatar, $item->fullname, $item->approved_to, $item->created_by, "setup_salaries");
             }
         }
 
-        if(count($permits) > 0) {
-            foreach ($permits as $permit) {
-                $this->approvalMessage($permit->avatar, $permit->fullname, $permit->approved_to, $permit->created_by, "permits");
+        if (is_array($permits) && count($permits) > 0) {
+            foreach ($permits as $item) {
+                $this->approvalMessage($item->avatar, $item->fullname, $item->approved_to, $item->created_by, "permits");
             }
         }
 
-        if(count($change_days) > 0) {
-            foreach ($change_days as $change_day) {
-                $this->approvalMessage($change_day->avatar, $change_day->fullname, $change_day->approved_to, $change_day->created_by, "change_days");
+        if (is_array($change_days) && count($change_days) > 0) {
+            foreach ($change_days as $item) {
+                $this->approvalMessage($item->avatar, $item->fullname, $item->approved_to, $item->created_by, "change_days");
             }
         }
     }
@@ -460,7 +465,7 @@ class Approvals extends CI_Controller
             $avatar = $foto;
         }
 
-        $link = "approvalDetail('$table', '$approved_to', '$created_by')";
+        $link = "approvalDetail('" . addslashes($table) . "', '" . addslashes($approved_to) . "', '" . addslashes($created_by) . "')";
         echo '  <li class="list-isi">
                     <a onclick="' . $link . '">
                         <table style="width: 100%;">
@@ -541,6 +546,9 @@ class Approvals extends CI_Controller
 
     public function approvalPermits($approved_to, $created_by)
     {
+        $approved_to = urldecode($approved_to);
+        $created_by = urldecode($created_by);
+
         $this->db->select('a.*,
                 c.number as employee_number,
                 c.name as employee_name,

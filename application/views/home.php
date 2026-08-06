@@ -735,10 +735,11 @@
 					],
 				}).datagrid('enableFilter');
 			} else if (table == "permits") {
+				
 				$('#dg_approval').datagrid({
 					singleSelect: true,
 					rownumbers: true,
-					url: '<?= base_url('approvals/approvalPermits/') ?>' + approved_to + "/" + created_by,
+					url: '<?= base_url('approvals/approvalPermits/') ?>' + encodeURIComponent(approved_to) + "/" + encodeURIComponent(created_by),
 					columns: [
 						[{
 							field: 'employee_number',

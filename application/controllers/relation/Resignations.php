@@ -39,11 +39,12 @@ class Resignations extends CI_Controller
         $this->db->select('*');
         $this->db->from('cutoff');
         $this->db->order_by('start', 'desc');
+        $this->db->where('deleted', 0);
         $cutoff = $this->db->get()->row();
 
         $this->db->select('*');
         $this->db->from('resignations');
-        $this->db->where('resign_date <', $cutoff->start);
+        $this->db->where('resign_date <=', $cutoff->finish);
         $this->db->where('status_resign', "ON PROCEDURE");
         $this->db->where('status', '0');
         $onprocedure = $this->db->get()->result_array();
@@ -164,6 +165,18 @@ class Resignations extends CI_Controller
         if ($this->input->post()) {
             if ($this->form_validation->run() == TRUE) {
                 $post   = $this->input->post();
+
+                $this->db->select('*');
+                $this->db->from('cutoff');
+                $this->db->where('deleted', 0);
+                $this->db->order_by('start', 'desc');
+                $cutoff = $this->db->get()->row();
+
+                if (empty($cutoff) || strtotime($post['resign_date']) > strtotime($cutoff->finish)) {
+                    echo json_encode(array("title" => "Not Found", "message" => strtotime($post['resign_date'])."<br>".strtotime($cutoff->finish)."Periode Cut off tidak ditemukan. Mohon daftarkan periode cut off terlebih dahulu", "theme" => "error"));
+                    return;
+                }
+
                 $send   = $this->crud->create('resignations', $post);
                 echo $send;
 
@@ -182,8 +195,22 @@ class Resignations extends CI_Controller
         if ($this->input->post()) {
             $id   = base64_decode($this->input->get('id'));
             $post = $this->input->post();
+
+            $this->db->select('*');
+            $this->db->from('cutoff');
+            $this->db->where('deleted', 0);
+            $this->db->order_by('start', 'desc');
+            $cutoff = $this->db->get()->row();
+
+            if (empty($cutoff) || strtotime($post['resign_date']) > strtotime($cutoff->finish)) {
+                echo json_encode(array("title" => "Not Found", "message" => "Periode Cut off tidak ditemukan. Mohon daftarkan periode cut off terlebih dahulu", "theme" => "error"));
+                return;
+            }
+
             $send = $this->crud->update('resignations', ["id" => $id], $post);
             echo $send;
+
+            $this->readEmployeeResign();
         } else {
             show_error("Cannot Process your request");
         }

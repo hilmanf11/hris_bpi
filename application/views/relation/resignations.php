@@ -295,12 +295,11 @@
 
                             if (result.theme == "success") {
                                 toastr.success(result.message, result.title);
+                                $('#dlg_insert').dialog('close');
+                                $('#dg').datagrid('reload');
                             } else {
                                 toastr.error(result.message, result.title);
                             }
-
-                            $('#dlg_insert').dialog('close');
-                            $('#dg').datagrid('reload');
                         }
                     });
                 }

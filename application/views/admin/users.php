@@ -125,6 +125,10 @@
             $('#frm_insert').form('load', row);
             $('#username').textbox('disable');
             $('#password').textbox('disable');
+
+            if ("<?= $this->session->username ?>" == "admin") {
+                $('#password').textbox('enable');
+            }
             url_save = '<?= base_url('admin/users/update') ?>?id=' + btoa(row.id);
         } else {
             toastr.info("Please select one of the data in the table first");
