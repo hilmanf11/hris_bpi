@@ -3,6 +3,7 @@
     <thead>
         <tr>
             <th field="ck" checkbox="true"></th>
+            <th data-options="field:'foto_in',width:60,align:'center',formatter:fotoFormatter">Photo</th>
             <th data-options="field:'dayname',width:80">Day</th>
             <th data-options="field:'date_in',width:80">Date In</th>
             <th data-options="field:'date_out',width:80">Date Out</th>
@@ -13,6 +14,7 @@
             <th data-options="field:'time_in',width:80">Check In</th>
             <th data-options="field:'time_out',width:80">Check Out</th>
             <th data-options="field:'attandance_type',width:80">Type</th>
+            
         </tr>
     </thead>
 </table>
@@ -58,6 +60,15 @@
                             <option value="ON TIME">ON TIME</option>
                             <option value="LATE">LATE</option>
                             <option value="UN SETTING">UN SETTING</option>
+                        </select>
+                    </div>
+                    <div class="fitem">
+                        <span style="width:35%; display:inline-block;">Attandance Type</span>
+                        <select style="width:60%;" id="filter_attandance_type" panelHeight="auto" class="easyui-combobox">
+                            <option value="">Choose All</option>
+                            <option value="Upload HRIS">Upload HRIS</option>
+                            <option value="Mobile HRIS">Mobile HRIS</option>
+                            <option value="QR Code">QR Code</option>
                         </select>
                     </div>
                 </div>
@@ -117,10 +128,28 @@
     </div>
 </div>
 
+<!-- DIALOG VIEW PHOTO -->
+<div id="dlg_photo" class="easyui-dialog" title="Attendance Photo" data-options="closed: true, modal: true" style="width: 450px; height: 450px; padding: 10px; text-align: center;">
+    <img id="img_preview" src="" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px;">
+</div>
+
 <!-- PDF -->
 <iframe id="printout" src="" style="width: 100%;" hidden></iframe>
 
 <script>
+    function showPhoto(url) {
+        $('#img_preview').attr('src', url);
+        $('#dlg_photo').dialog('open');
+    }
+
+    function fotoFormatter(value, row, index) {
+        if (row.attandance_type === 'QR Code' && value) {
+            var imgUrl = '<?= base_url("assets/image/attandances/") ?>' + value;
+            return '<a href="javascript:void(0)" onclick="showPhoto(\'' + imgUrl + '\')" title="View Photo" class="easyui-linkbutton"><i class="fa fa-eye" style="font-size:16px; color:#337ab7;"></i></a>';
+        }
+        return '';
+    }
+
     //ADD DATA
     function add() {
         $('#dlg_insert').dialog('open');
@@ -195,6 +224,7 @@
         var filter_departement_sub = $("#filter_departement_sub").combobox('getValue');
         var filter_employee = $("#filter_employee").combobox('getValue');
         var filter_status = $("#filter_status").combobox('getValue');
+        var filter_attandance_type = $("#filter_attandance_type").combobox('getValue');
 
         var url = "?filter_from=" + filter_from +
             "&filter_to=" + filter_to +
@@ -202,7 +232,8 @@
             "&filter_departement=" + filter_departement +
             "&filter_departement_sub=" + filter_departement_sub +
             "&filter_employee=" + filter_employee +
-            "&filter_status=" + filter_status;
+            "&filter_status=" + filter_status +
+            "&filter_attandance_type=" + filter_attandance_type;
 
         // Copy date parts of the timestamps, discarding the time parts.
         var date1 = new Date(filter_from);

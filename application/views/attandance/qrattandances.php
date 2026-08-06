@@ -37,12 +37,42 @@
             justify-content: space-between;
             padding: 40px 60px;
         }
+
+        @media (max-width: 768px) {
+            html, body {
+                height: auto;
+                min-height: 100vh;
+                overflow-y: auto;
+            }
+            .kiosk-wrapper {
+                height: auto;
+                min-height: 100vh;
+                padding: 16px 12px;
+            }
+            .kiosk-header {
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+            .kiosk-header-left {
+                gap: 10px !important;
+            }
+            .kiosk-header-right {
+                width: 100%;
+                justify-content: space-between;
+            }
+            .kiosk-title {
+                font-size: 15px !important;
+            }
+            #camera-mode-box {
+                padding: 12px !important;
+            }
+        }
         
         /* card Tengah */
         .kiosk-card {
             background: #253152;
             width: 100%;
-            max-width: 580px;
+            max-width: 850px;
             border: none;
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
         }
@@ -222,9 +252,9 @@
                     </div>
                 </div>
 
-                <div id="camera-mode-box" class="bg-white rounded-4 p-4 text-center" style="width: 100%; max-width: 400px; margin: 0 auto; box-shadow: inset 0 0 0 2px #3b82f6; position: relative;">
-                    <div id="reader" style="width: 100%; min-height: 250px; overflow: hidden; border-radius: 12px; background: #f8fafc; display: flex; align-items: center; justify-content: center;"></div>
-                    <div class="scanner-status-dot d-inline-flex align-items-center gap-2 mt-4">
+                <div id="camera-mode-box" class="bg-white rounded-4 p-4 text-center" style="width: 100%; max-width: 700px; margin: 0 auto; box-shadow: inset 0 0 0 2px #3b82f6; position: relative;">
+                    <div id="reader" style="width: 100%; min-height: 360px; overflow: hidden; border-radius: 12px; background: #f8fafc; display: flex; align-items: center; justify-content: center;"></div>
+                    <div class="scanner-status-dot d-inline-flex align-items-center gap-2 mt-4" style="font-size: 15px;">
                         <span class="pulse-dot"></span> CAMERA ACTIVE
                     </div>
                 </div>
@@ -394,7 +424,7 @@
                             { facingMode: "environment" }, 
                             {
                                 fps: 10,
-                                qrbox: { width: 250, height: 250 }
+                                qrbox: { width: 320, height: 320 }
                             },
                             (decodedText, decodedResult) => {
                                 if (window.html5QrCode.getState() === 2) { // 2 = SCANNING
@@ -435,22 +465,90 @@
             }
         }
 
+        // Fungsi untuk memutar suara ucapan nama + berhasil absen
+        function playVoice(namaKaryawan, type) {
+            if (!namaKaryawan) return;
+            // Cek apakah browser mendukung Web Speech API
+            if ('speechSynthesis' in window) {
+                // Hentikan suara sebelumnya jika masih ada yang berjalan
+                window.speechSynthesis.cancel();
+
+                // Buat kalimat ucapan berdasarkan tipe (CHECK IN / CHECK OUT)
+                let prefix = (type === 'CHECK OUT') ? "Sampai jumpa lagi " : "Selamat datang ";
+                let teks = prefix + namaKaryawan;
+                let utterance = new SpeechSynthesisUtterance(teks);
+
+                // Atur Bahasa ke Indonesia
+                utterance.lang = 'id-ID';
+                
+                // Atur kecepatan bicara (1.0 = normal, 0.9 = sedikit santai)
+                utterance.rate = 1.0; 
+                
+                // Atur nada suara (1.0 = normal)
+                utterance.pitch = 1.0; 
+
+                // Jalankan suara
+                window.speechSynthesis.speak(utterance);
+            } else {
+                console.log("Browser ini tidak mendukung fitur Text-to-Speech.");
+            }
+        }
+
+        // Fungsi untuk memutar suara pesan error / gagal absen
+        function playVoiceError(pesanError) {
+            // 1. Tentukan teks pesan default jika parameter kosong/undefined
+            let pesan = pesanError || "Maaf, Nomor ID Anda Tidak Terdaftar, silahkan coba lagi";
+
+            // 2. Tambahkan pancingan titik/koma di awal + ubah "ID" jadi "I D" (bukan "AI")
+            let teks = pesan.replace(/\bID\b|\bid\b|\bId\b/g, "I D");
+
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+
+                // Jeda 50ms agar cancel() stabil di tablet Android
+                setTimeout(function() {
+                    let utterance = new SpeechSynthesisUtterance(teks);
+                    utterance.lang = 'id-ID';
+                    utterance.rate = 1.0;
+                    utterance.pitch = 1.0;
+                    
+                    window.speechSynthesis.speak(utterance);
+                }, 50);
+            } else {
+                console.log("Browser ini tidak mendukung fitur Text-to-Speech.");
+            }
+        }
+
         // 4. FUNGSI AJAX
         function processAbsen(data) {
             $('#status-area').html('<h4 style="color:blue;">Memproses scan...</h4>');
 
+            let capturedImage = '';
+            // Tangkap gambar dari video elemen html5-qrcode jika mode kamera aktif
+            if (window.currentMode === 'camera') {
+                const videoElem = document.querySelector('#reader video');
+                if (videoElem && videoElem.videoWidth) {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = videoElem.videoWidth;
+                    canvas.height = videoElem.videoHeight;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(videoElem, 0, 0, canvas.width, canvas.height);
+                    capturedImage = canvas.toDataURL('image/jpeg', 0.85);
+                }
+            }
+
             $.ajax({
                 url: "<?= base_url('attandance/Qrattandances/createData') ?>",
                 type: "POST",
-                data: { qrcode: data },
+                data: { 
+                    qrcode: data,
+                    image: capturedImage
+                },
                 dataType: 'json',
                 success: function(response) {
                     if (response.theme === 'success') {
 
-                        let audio = new Audio("<?= base_url('assets/audio/Success.mp3') ?>");
-                        audio.play().catch(function(error) {
-                            console.log("Browser memblokir autoplay audio sebelum ada interaksi:", error);
-                        });
+                        playVoice(response.results.name, response.type);
 
                         $('#emp-id').text(response.results.id);
                         $('#emp-name').text(response.results.name);
@@ -460,6 +558,20 @@
                         $('#emp-date').text(response.results.date);
                         $('#attendance-label').text(response.type);
 
+                        let photoFile = null;
+                        if (response.type === 'CHECK IN') {
+                            photoFile = response.results.foto_in;
+                        } else if (response.type === 'CHECK OUT') {
+                            photoFile = response.results.foto_out;
+                        } else {
+                            photoFile = response.results.foto_in || response.results.foto_out;
+                        }
+
+                        if (photoFile) {
+                            $('.avatar-profile').attr('src', "<?= base_url('assets/image/attandances/') ?>" + photoFile);
+                        } else {
+                            $('.avatar-profile').attr('src', 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150');
+                        }
 
                         $('#screen-success').removeClass('d-none');
 
@@ -472,29 +584,61 @@
                         }, 4000); 
 
                     } else {
-                        let audio = new Audio("<?= base_url('assets/audio/Try_again.mp3') ?>");
-                        audio.play().catch(function(error) {
-                            console.log("Browser memblokir autoplay audio sebelum ada interaksi:", error);
-                        });
-                        alert(response.message);
+                        playVoiceError(response.message);
+                        // alert(response.message);
+                        showAlertToast(response.message, 'error');
+                        setTimeout(function() {
+                            $('#status-area').html('<h3>Place your Employee QR Card in front of the scanner</h3>');
+                            if (window.currentMode === 'camera' && window.html5QrCode && window.html5QrCode.getState() === 3) {
+                                window.html5QrCode.resume();
+                            }
+                        }, 2000);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    playVoiceError("Koneksi dengan server bermasalah");
+                    // alert("Koneksi dengan server bermasalah");
+                    showAlertToast("Koneksi dengan server bermasalah", 'error');
+                    setTimeout(function() {
                         $('#status-area').html('<h3>Place your Employee QR Card in front of the scanner</h3>');
                         if (window.currentMode === 'camera' && window.html5QrCode && window.html5QrCode.getState() === 3) {
                             window.html5QrCode.resume();
                         }
-                    }
-                },
-                error: function(xhr, status, error) {
-                    alert("Koneksi bermasalah dengan server.");
-                    $('#status-area').html('<h3>Place your Employee QR Card in front of the scanner</h3>');
-                    if (window.currentMode === 'camera' && window.html5QrCode && window.html5QrCode.getState() === 3) {
-                        window.html5QrCode.resume();
-                    }
+                    }, 2000);
                 }
             });
         }
         // Auto-start camera mode saat halaman dibuka
         switchMode('camera');
     });
+
+    function showAlertToast(message, type = 'error') {
+        // Tentukan warna background (merah untuk error, hijau untuk sukses)
+        let bgColor = (type === 'success') ? '#22c55e' : '#ef4444';
+
+        // Buat elemen alert melayang
+        let toast = $(`
+            <div style="position: fixed; top: 30px; left: 50%; transform: translateX(-50%); 
+                        background-color: ${bgColor}; color: white; padding: 16px 28px; 
+                        border-radius: 12px; font-weight: 700; font-size: 16px; 
+                        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3); z-index: 99999; 
+                        text-align: center; max-width: 90%; opacity: 0; transition: all 0.3s ease;">
+                ${message}
+            </div>
+        `);
+
+        // Tempel ke body
+        $('body').append(toast);
+
+        // Efek Muncul (Fade In)
+        setTimeout(() => { toast.css('opacity', '1'); }, 50);
+
+        // Hilang Otomatis Setelah 3 Detik (3000 ms)
+        setTimeout(() => {
+            toast.css('opacity', '0');
+            setTimeout(() => toast.remove(), 300); // Hapus dari HTML setelah fade out
+        }, 3000);
+    }
 </script>
 
 </body>

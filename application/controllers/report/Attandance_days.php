@@ -48,7 +48,7 @@ class Attandance_days extends CI_Controller
             $filter_status = $this->input->get('filter_status');
 
             $this->db->select('b.id as employee_id, b.number as employee_number, b.name as employee_name, c.name as division_name, 
-            d.name as departement_name, e.name as departement_sub_name, g.name as shift_name, h.days');
+            d.name as departement_name, e.name as departement_sub_name, g.id as shift_id, g.name as shift_name, h.days');
             $this->db->from('employees b');
             $this->db->join('divisions c', 'b.division_id = c.id');
             $this->db->join('departements d', 'b.departement_id = d.id');
@@ -58,20 +58,87 @@ class Attandance_days extends CI_Controller
             $this->db->join('shift_details h', 'h.shift_id = g.id');
             $this->db->where('b.deleted', 0);
             $this->db->where('b.status', 0);
-            $this->db->like('b.id', $filter_employee);
-            $this->db->like('c.id', $filter_division);
-            $this->db->like('d.id', $filter_departement);
-            $this->db->like('e.id', $filter_departement_sub);
+            if (!empty($filter_employee)) {
+                $this->db->where('b.id', $filter_employee);
+            }
+            if (!empty($filter_division)) {
+                $this->db->where('c.id', $filter_division);
+            }
+            if (!empty($filter_departement)) {
+                $this->db->where('d.id', $filter_departement);
+            }
+            if (!empty($filter_departement_sub)) {
+                $this->db->where('e.id', $filter_departement_sub);
+            }
             $this->db->group_by('b.id');
             $this->db->order_by('d.name', 'ASC');
             $this->db->order_by('e.name', 'ASC');
             $this->db->order_by('b.name', 'ASC');
             $records = $this->db->get()->result_array();
 
-            //Config
+            // Config
             $this->db->select('*');
             $this->db->from('config');
             $config = $this->db->get()->row();
+
+            // --- BATCH QUERY OPTIMIZATION ---
+            $employee_ids = array_column($records, 'employee_id');
+            $employee_numbers = array_column($records, 'employee_number');
+            $shift_ids = array_filter(array_unique(array_column($records, 'shift_id')));
+
+            // 1. Fetch Calendars
+            $calendars_map = array();
+            $this->db->select('trans_date, description');
+            $this->db->from('calendars');
+            $this->db->where('trans_date >=', $filter_from);
+            $this->db->where('trans_date <=', $filter_to);
+            $calendars_res = $this->db->get()->result_array();
+            foreach ($calendars_res as $c_row) {
+                $calendars_map[$c_row['trans_date']] = $c_row['description'];
+            }
+
+            // 2. Fetch Permits
+            $permits_map = array();
+            if (!empty($employee_ids)) {
+                $this->db->select('a.employee_id, a.permit_date, d.name as permit_name');
+                $this->db->from('permits a');
+                $this->db->join('reasons c', 'a.reason_id = c.id');
+                $this->db->join('permit_types d', 'a.permit_type_id = d.id');
+                $this->db->where_in('a.employee_id', $employee_ids);
+                $this->db->where('a.permit_date >=', $filter_from);
+                $this->db->where('a.permit_date <=', $filter_to);
+                $permits_res = $this->db->get()->result_array();
+                foreach ($permits_res as $p_row) {
+                    $permits_map[$p_row['employee_id']][$p_row['permit_date']] = $p_row['permit_name'];
+                }
+            }
+
+            // 3. Fetch Attendances & Overtimes
+            $attandances_map = array();
+            if (!empty($employee_numbers)) {
+                $this->db->select('a.id as employee_id, b.number, b.date_in, b.time_in, b.date_out, b.time_out');
+                $this->db->from('employees a');
+                $this->db->join('attandances b', 'a.number = b.number');
+                $this->db->where_in('a.number', $employee_numbers);
+                $this->db->where('b.date_in >=', $filter_from);
+                $this->db->where('b.date_in <=', $filter_to);
+                $attandances_res = $this->db->get()->result_array();
+                foreach ($attandances_res as $att_row) {
+                    $attandances_map[$att_row['employee_id']][$att_row['date_in']] = (object)$att_row;
+                }
+            }
+
+            // 4. Fetch Shift Details
+            $shift_details_map = array();
+            if (!empty($shift_ids)) {
+                $this->db->select('shift_id, start, end, days, working, tolerance, name as shift_detail_name');
+                $this->db->from('shift_details');
+                $this->db->where_in('shift_id', $shift_ids);
+                $shift_details_res = $this->db->get()->result_array();
+                foreach ($shift_details_res as $sd_row) {
+                    $shift_details_map[$sd_row['shift_id']][] = (object)$sd_row;
+                }
+            }
 
             echo '<html><head><title>Print Data</title></head><style>body {font-family: Arial, Helvetica, sans-serif;}#customers {border-collapse: collapse;width: 100%;font-size: 10px;}#customers td, #customers th {border: 1px solid #ddd;padding: 2px;}#customers tr:nth-child(even){background-color: #f2f2f2;}#customers tr:hover {background-color: #ddd;}#customers th {padding-top: 2px;padding-bottom: 2px;text-align: left;color: black;}</style>
             <style> .str{ mso-number-format:\@; } </style>
@@ -120,64 +187,40 @@ class Attandance_days extends CI_Controller
 
             foreach ($records as $data) {
                 $html = "";
+                $emp_id = $data['employee_id'];
+                $shift_id = $data['shift_id'];
+
                 for ($i = $start; $i <= $finish; $i += (60 * 60 * 24)) {
                     $working_date = date('Y-m-d', $i);
+                    $holiday_desc = isset($calendars_map[$working_date]) ? $calendars_map[$working_date] : null;
 
-                    $this->db->select('description');
-                    $this->db->from('calendars');
-                    $this->db->where('trans_date', $working_date);
-                    $holiday = $this->db->get()->row();
+                    // Attendance row
+                    $attandance = isset($attandances_map[$emp_id][$working_date]) ? $attandances_map[$emp_id][$working_date] : null;
 
-                    //Attandance and Overtime
-                    $this->db->select("b.date_in, b.time_in, b.date_out, b.time_out, c.request_code, c.start, c.end, c.duration, c.remarks");
-                    $this->db->from('employees a');
-                    $this->db->join('attandances b', 'a.number = b.number');
-                    $this->db->join('overtimes c', 'a.id = c.employee_id and b.date_in = c.trans_date', 'left');
-                    $this->db->where("b.date_in = '$working_date'");
-                    $this->db->where('a.id', $data['employee_id']);
-                    $this->db->order_by('a.name', 'asc');
-                    $this->db->order_by('b.date_in', 'asc');
-                    $attandance = $this->db->get()->row();
+                    // Shift match
+                    $shift = null;
+                    if ($attandance && !empty($attandance->time_in) && isset($shift_details_map[$shift_id])) {
+                        $tolerance_hour_min = date("H:i:s", strtotime('-2 Hour', strtotime($attandance->time_in)));
+                        $tolerance_hour_plus = date("H:i:s", strtotime('+2 Hour', strtotime($attandance->time_in)));
 
-                    //Shift and Setting Group
-                    $tolerance_hour_min = date("H:i:s", strtotime('-2 Hour', strtotime(@$attandance->time_in)));
-                    $tolerance_hour_plus = date("H:i:s", strtotime('+2 Hour', strtotime(@$attandance->time_in)));
-                    $this->db->select("d.start, d.end, d.days, d.working, d.tolerance, c.name, d.name as shift_name");
-                    $this->db->from('shift_employees b');
-                    $this->db->join('shifts c', 'c.id = b.shift_id');
-                    $this->db->join('shift_details d', 'd.shift_id = c.id');
-                    $this->db->where('b.employee_id', $data['employee_id']);
-                    $this->db->where("d.start >=  '$tolerance_hour_min' and d.start <= '$tolerance_hour_plus'");
-                    $shift = $this->db->get()->row();
+                        foreach ($shift_details_map[$shift_id] as $sd) {
+                            if ($sd->start >= $tolerance_hour_min && $sd->start <= $tolerance_hour_plus) {
+                                $shift = $sd;
+                                break;
+                            }
+                        }
+                    }
 
-                    //PERMIT
-                    $this->db->select("a.*, c.name as reason_name, d.name as permit_name");
-                    $this->db->from('permits a');
-                    $this->db->join('reasons c', 'a.reason_id = c.id');
-                    $this->db->join('permit_types d', 'a.permit_type_id = d.id');
-                    $this->db->where('a.employee_id', $data['employee_id']);
-                    $this->db->where('a.permit_date', $working_date);
-                    $permit = $this->db->get()->row();
-
-                    $this->db->select("*");
-                    $this->db->from('change_days');
-                    $this->db->where('employee_id', $data['employee_id']);
-                    $this->db->where('start', $working_date);
-                    $change_day = $this->db->get()->row();
-
-                    $this->db->select("*");
-                    $this->db->from('change_days');
-                    $this->db->where('employee_id', $data['employee_id']);
-                    $this->db->where('end', $working_date);
-                    $change_day_end = $this->db->get()->row();
+                    // Permit match
+                    $permit_name = isset($permits_map[$emp_id][$working_date]) ? $permits_map[$emp_id][$working_date] : null;
 
                     if (@$data['days'] == "5") {
-                        //sabtu dan minggu libur
+                        // sabtu dan minggu libur
                         if (date('w', $i) !== '0' && date('w', $i) !== '6') {
-                            if (!empty($holiday->description)) {
+                            if (!empty($holiday_desc)) {
                                 $status = "HOLIDAY";
                             } else {
-                                if (@$permit->permit_name != null) {
+                                if ($permit_name != null) {
                                     $status = "PERMIT";
                                 } elseif (@$shift->start == null) {
                                     $status = "UN SETTING";
@@ -193,12 +236,12 @@ class Attandance_days extends CI_Controller
                             $status = "WEEKEND";
                         }
                     } else {
-                        //sabtu doang libur
+                        // sabtu doang libur
                         if (date('w', $i) !== '0') {
-                            if (!empty($holiday->description)) {
+                            if (!empty($holiday_desc)) {
                                 $status = "HOLIDAY";
                             } else {
-                                if (@$permit->permit_name != null) {
+                                if ($permit_name != null) {
                                     $status = "PERMIT";
                                 } elseif (@$shift->start == null) {
                                     $status = "UN SETTING";
@@ -227,31 +270,19 @@ class Attandance_days extends CI_Controller
                         $style = "style='color:red; font-weight:bold;'";
                     }
 
-                    if ($status == $filter_status) {
-                        $html .= '   <tr>
-                                        <td>' . $no . '</td>
-                                        <td>' . $data['departement_name'] . '</td>
-                                        <td>' . $data['departement_sub_name'] . '</td>
-                                        <td style="mso-number-format:\@;">' . $data['employee_number'] . '</td>
-                                        <td>' . $data['employee_name'] . '</td>
-                                        <td>' . $data['shift_name'] . '</td>
-                                        <td>' . date("d F Y", strtotime(@$working_date)) . '</td>
-                                        <td>' . @$attandance->time_in . ' - ' . @$attandance->time_out . '</td>
-                                        <td ' . $style . '>' . $status . '</td>
-                                    </tr>';
-                    } else {
-                        $html .= '   <tr>
-                                        <td>' . $no . '</td>
-                                        <td>' . $data['departement_name'] . '</td>
-                                        <td>' . $data['departement_sub_name'] . '</td>
-                                        <td style="mso-number-format:\@;">' . $data['employee_number'] . '</td>
-                                        <td>' . $data['employee_name'] . '</td>
-                                        <td>' . $data['shift_name'] . '</td>
-                                        <td>' . date("d F Y", strtotime(@$working_date)) . '</td>
-                                        <td>' . @$attandance->time_in . ' - ' . @$attandance->time_out . '</td>
-                                        <td ' . $style . '>' . $status . '</td>
-                                    </tr>';
-                    }
+                    $time_in_out = ($attandance) ? $attandance->time_in . ' - ' . $attandance->time_out : ' - ';
+
+                    $html .= '   <tr>
+                                    <td>' . $no . '</td>
+                                    <td>' . $data['departement_name'] . '</td>
+                                    <td>' . $data['departement_sub_name'] . '</td>
+                                    <td style="mso-number-format:\@;">' . $data['employee_number'] . '</td>
+                                    <td>' . $data['employee_name'] . '</td>
+                                    <td>' . $data['shift_name'] . '</td>
+                                    <td>' . date("d F Y", strtotime($working_date)) . '</td>
+                                    <td>' . $time_in_out . '</td>
+                                    <td ' . $style . '>' . $status . '</td>
+                                </tr>';
 
                     $no++;
                 }

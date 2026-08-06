@@ -53,10 +53,11 @@ class Attandances extends CI_Controller
             $filter_departement_sub = $this->input->get('filter_departement_sub');
             $filter_employee = $this->input->get('filter_employee');
             $filter_status = $this->input->get('filter_status');
+            $filter_attandance_type = $this->input->get('filter_attandance_type');
             $result = array();
 
             //Employee
-            $this->db->select("a.id, b.id as attandance_id, a.number, a.name, a.division_id, a.departement_id, a.departement_sub_id,coalesce(b.attandance_type,'Upload HRIS') as attandance_type,
+            $this->db->select("a.id, b.id as attandance_id, a.number, a.name, a.division_id, a.departement_id, a.departement_sub_id, (CASE WHEN b.attandance_type IS NULL OR TRIM(b.attandance_type) = '' THEN 'Upload HRIS' ELSE b.attandance_type END) as attandance_type, b.foto_in,
                 DAYNAME(b.date_in) as dayname,
                 b.date_in,
                 b.date_out,
@@ -79,6 +80,13 @@ class Attandances extends CI_Controller
             $this->db->like('a.departement_id', $filter_departement);
             $this->db->like('a.departement_sub_id', $filter_departement_sub);
             $this->db->like('a.id', $filter_employee);
+            if ($filter_attandance_type != "") {
+                if ($filter_attandance_type == "Upload HRIS") {
+                    $this->db->where("(b.attandance_type = 'Upload HRIS' OR b.attandance_type IS NULL OR TRIM(b.attandance_type) = '')");
+                } else {
+                    $this->db->where('b.attandance_type', $filter_attandance_type);
+                }
+            }
             $this->db->group_by("a.number");
             $this->db->group_by("b.date_in");
             $this->db->order_by("d.name", "asc");
@@ -572,6 +580,102 @@ class Attandances extends CI_Controller
             header("Content-type: application/vnd-ms-excel");
             header("Content-Disposition: attachment; filename=attandances_$format.xls");
         }
-        echo "<center><h4>Not Available Report Attandance in this module</h4></center>";
+
+        $filter_from = $this->input->get('filter_from');
+        $filter_to = $this->input->get('filter_to');
+        $filter_division = $this->input->get('filter_division');
+        $filter_departement = $this->input->get('filter_departement');
+        $filter_departement_sub = $this->input->get('filter_departement_sub');
+        $filter_employee = $this->input->get('filter_employee');
+        $filter_attandance_type = $this->input->get('filter_attandance_type');
+
+        $this->db->select("a.id, b.id as attandance_id, a.number, a.name, a.division_id, a.departement_id, a.departement_sub_id, (CASE WHEN b.attandance_type IS NULL OR TRIM(b.attandance_type) = '' THEN 'Upload HRIS' ELSE b.attandance_type END) as attandance_type, b.foto_in,
+            DAYNAME(b.date_in) as dayname,
+            b.date_in,
+            b.date_out,
+            b.time_in,
+            b.time_out,
+            c.name as division_name, 
+            d.name as departement_name, 
+            e.name as departement_sub_name, 
+            g.name as contract_name");
+        $this->db->from('employees a');
+        $this->db->join('attandances b', 'a.number = b.number');
+        $this->db->join('divisions c', 'a.division_id = c.id');
+        $this->db->join('departements d', 'a.departement_id = d.id');
+        $this->db->join('departement_subs e', 'a.departement_sub_id = e.id');
+        $this->db->join('contracts g', 'g.id = a.contract_id', 'left');
+        if ($filter_from != "" && $filter_to != "") {
+            $this->db->where("(b.date_in >= '$filter_from' and b.date_in <= '$filter_to' or b.date_out >= '$filter_from' and b.date_out <= '$filter_to')");
+        }
+        $this->db->like('a.division_id', $filter_division);
+        $this->db->like('a.departement_id', $filter_departement);
+        $this->db->like('a.departement_sub_id', $filter_departement_sub);
+        $this->db->like('a.id', $filter_employee);
+        if ($filter_attandance_type != "") {
+            if ($filter_attandance_type == "Upload HRIS") {
+                $this->db->where("(b.attandance_type = 'Upload HRIS' OR b.attandance_type IS NULL OR TRIM(b.attandance_type) = '')");
+            } else {
+                $this->db->where('b.attandance_type', $filter_attandance_type);
+            }
+        }
+        $this->db->group_by("a.number");
+        $this->db->group_by("b.date_in");
+        $this->db->order_by("d.name", "asc");
+        $this->db->order_by("a.name", "asc");
+        $this->db->order_by("b.date_in", "asc");
+        $records = $this->db->get()->result_array();
+
+        $html = '<html><head><title>Print Data Attandance</title></head><style>body {font-family: Arial, Helvetica, sans-serif;}#customers {border-collapse: collapse;width: 100%;font-size: 12px;}#customers td, #customers th {border: 1px solid #ddd;padding: 4px;}#customers tr:nth-child(even){background-color: #f2f2f2;}#customers tr:hover {background-color: #ddd;}#customers th {padding-top: 6px;padding-bottom: 6px;text-align: left;color: black;background-color: #e5e7eb;}</style><body>
+        <style> .str{ mso-number-format:\@; } </style>
+        <center>
+            <div style="float: left; font-size: 12px; text-align: left;">
+                Human Resource Information System
+            </div>
+            <div style="float: right; font-size: 12px; text-align: right;">
+                Print Date ' . date("d M Y H:i:s") . ' <br>
+                Print By ' . $this->session->username . '  
+            </div>
+        </center><br><br>
+        <center>
+            <h3>Data Attendance</h3>
+        </center>
+        
+        <table id="customers" border="1">
+            <tr>
+                <th width="20">No</th>
+                <th>Employee ID</th>
+                <th>Fullname</th>
+                <th>Division</th>
+                <th>Department</th>
+                <th>Department Sub</th>
+                <th>Day</th>
+                <th>Date In</th>
+                <th>Time In</th>
+                <th>Date Out</th>
+                <th>Time Out</th>
+                <th>Attendance Type</th>
+            </tr>';
+        $no = 1;
+        foreach ($records as $data) {
+            $html .= '<tr>
+                    <td>' . $no . '</td>
+                    <td class="str">' . $data['number'] . '</td>
+                    <td>' . $data['name'] . '</td>
+                    <td>' . $data['division_name'] . '</td>
+                    <td>' . $data['departement_name'] . '</td>
+                    <td>' . $data['departement_sub_name'] . '</td>
+                    <td>' . $data['dayname'] . '</td>
+                    <td>' . $data['date_in'] . '</td>
+                    <td>' . $data['time_in'] . '</td>
+                    <td>' . $data['date_out'] . '</td>
+                    <td>' . $data['time_out'] . '</td>
+                    <td>' . $data['attandance_type'] . '</td>
+                    </tr>';
+            $no++;
+        }
+
+        $html .= '</table></body></html>';
+        echo $html;
     }
 }
