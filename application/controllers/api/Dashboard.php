@@ -23,24 +23,76 @@ class Dashboard extends CI_Controller
         show_error("Cannot Process your request");
     }
 
+    // public function attendance($api_key = "")
+    // {
+    //     $this->output->delete_cache();
+    //     if (!empty($api_key)) {
+    //         $user = $this->mobile->read("users", [], ["api_key" => $api_key]);
+
+    //         $employee = $this->mobile->read("employees", [], ["number" => $user->number]);
+
+    //         if ($user) {
+    //             $attandances = $this->mobile->read("attandances", [], ["number" => $user->number, "date_in" => date("Y-m-d")], 1, "", "", ["number", "date_in"]);
+
+    //             $this->db->select("d.start, d.end, d.days, d.working, d.tolerance, c.name, d.name as shift_name");
+    //             $this->db->from('shift_employees b');
+    //             $this->db->join('shifts c', 'c.id = b.shift_id');
+    //             $this->db->join('shift_details d', 'd.shift_id = c.id');
+    //             $this->db->where('b.employee_id', $employee->id);
+    //             $shift = $this->db->get()->row();
+
+    //             if (!empty($attandances->foto_in)) {
+    //                 $folder = date("Ym", strtotime($attandances->date_in));
+    //                 $foto_in = 'assets/document/attendance/' . $folder . '/' . $attandances->foto_in;
+    //             } else {
+    //                 $foto_in = null;
+    //             }
+
+    //             if (!empty($attandances->foto_out)) {
+    //                 $folder = date("Ym", strtotime($attandances->date_out));
+    //                 $foto_out = 'assets/document/attendance/' . $folder . '/' . $attandances->foto_out;
+    //             } else {
+    //                 $foto_out = null;
+    //             }
+
+    //             die(json_encode(array(
+    //                 "title" => "Success",
+    //                 "message" => "Data Found",
+    //                 "theme" => "success",
+    //                 "results" => array(
+    //                     "start" => @$shift->start,
+    //                     "end" => @$shift->end,
+    //                     "shift_name" => @$shift->shift_name,
+    //                     "shift_detail" => @$shift->name,
+    //                     "date_in" => @$attandances->date_in,
+    //                     "date_out" => @$attandances->date_out,
+    //                     "time_in" => @$attandances->time_in,
+    //                     "time_out" => @$attandances->time_out,
+    //                     "foto_in" => $foto_in,
+    //                     "foto_out" => $foto_out,
+    //                 )
+    //             )));
+    //         } else {
+    //             show_error("Api Key Invalid");
+    //         }
+    //     } else {
+    //         show_error("Cannot Process your request");
+    //     }
+    // }
+
     public function settingFeatures() 
     {
-        $version = "1.0.1";
         $data = [
             "is_attendance" => 'Y',
             "is_overtime" => 'Y',
-            "is_add_overtime" => 'N',
-            "is_cancel_overtime" => 'N',
+            "is_add_overtime" => 'Y',
+            "is_cancel_overtime" => 'Y',
             "is_change_days" => 'Y',
-            "is_add_change_days" => 'N',
-            "is_cancel_change_days" => 'N',
+            "is_add_change_days" => 'Y',
+            "is_cancel_change_days" => 'Y',
             "is_permits" => 'Y',
             "is_add_permit" => 'Y',
             "is_cancel_permit" => 'Y',
-            "version" => $version,
-            "link" => "https://bpi.astechno.net/hris-bpi/",
-            // kondisi jika versi nya berbeda
-            "info" => "Versi terbaru aplikasi tersedia.\nSilakan update ke versi $version untuk melanjutkan."
         ];
 
         die(json_encode(array(
@@ -357,15 +409,6 @@ class Dashboard extends CI_Controller
             return;
         }
 
-        // if (!$this->input->post()) {
-        //     show_error("Request invalid");
-        //     return;
-        // }
-
-        // $post = $this->input->post();
-
-        // Contoh input: 2025-10
-        // $month = $post['request_date'];
         $month = date('Y-m');
 
         $number = $user->number;
@@ -426,15 +469,36 @@ class Dashboard extends CI_Controller
             $this->db->where('a.permit_date', $working_date);
             $permit = $this->db->get()->row();
 
-            // Query Shift (Diambil yang paling awal)
+            // // Query Shift (Diambil yang paling awal)
+            // $this->db->select("d.start, d.end, d.days, d.tolerance, c.id as shift_id");
+            // $this->db->from('employees a');
+            // $this->db->join('shift_employees b', 'a.id = b.employee_id');
+            // $this->db->join('shifts c', 'c.id = b.shift_id');
+            // $this->db->join('shift_details d', 'd.shift_id = c.id');
+            // $this->db->where('a.number', $number);
+            // $this->db->order_by('d.start', 'ASC');
+            // $shift = $this->db->get()->row();
+
+            // ==========================================================
+            // GET ALL SHIFT DETAILS EMPLOYEE
+            // ==========================================================
             $this->db->select("d.start, d.end, d.days, d.tolerance, c.id as shift_id");
             $this->db->from('employees a');
             $this->db->join('shift_employees b', 'a.id = b.employee_id');
             $this->db->join('shifts c', 'c.id = b.shift_id');
             $this->db->join('shift_details d', 'd.shift_id = c.id');
             $this->db->where('a.number', $number);
-            $this->db->order_by('d.start', 'ASC');
-            $shift = $this->db->get()->row();
+
+            $shift_details = $this->db->get()->result();
+
+
+            // ==========================================================
+            // FIND CLOSEST SHIFT BASED ON TIME IN
+            // ==========================================================
+            $shift = $this->getClosestShiftDetail(
+                @$attandance->time_in,
+                $shift_details
+            );
 
             // Query Change Day
             $change_day = $this->mobile->read("change_days", ["*"], ["employee_id" => $employee->id, "start" => $working_date]);
@@ -504,16 +568,24 @@ class Dashboard extends CI_Controller
                         $working++;
                         $color = "green";
                     } elseif ($shift_days == "6" && $day_of_week == 6 && !empty($shift) && !empty($shift->start)) {
-                        if (strtotime($attandance->time_in) > strtotime($shift->start)) {
+                        $lateStatus = $this->isLate( $working_date, $attandance->time_in, $shift->start, $shift->end);
+
+                        if ($lateStatus) {
+
                             $status = "LATE";
                             $late++;
-                            $remarks = "Masuk: " . $attandance->time_in . " (Sabtu Shift)";
+                            $remarks = "Shift: " . $shift->start . " - " . $shift->end . " (Sabtu Shift)";
                             $color = "orange";
+
                         } else {
+
                             $status = "ON TIME";
-                            $remarks = "Masuk: " . $attandance->time_in . " (Sabtu Shift)";
+
+                            $remarks = "Shift: " . $shift->start . " - " . $shift->end ." (Sabtu Shift)";
+
                             $color = "green";
                         }
+
                         $working++;
                     } else {
                         $status = "ON TIME (Weekend Fallback)";
@@ -541,34 +613,32 @@ class Dashboard extends CI_Controller
 
                 // 8. HARI KERJA NORMAL (Ada absensi masuk)
             } elseif (!empty($attandance->time_in)) {
+
                 $working++;
 
                 if (empty($shift) || empty($shift->start)) {
+
                     $status = "ON TIME (UN SETTING)";
                     $remarks = "Check Shift Employee (No Shift Start Time)";
                     $color = "orange";
 
-                    // LOGIKA KHUSUS SHIFT 6 HARI KERJA (Jumat & Sabtu)
-                } elseif (@$shift->shift_id == '20241126000001' && in_array($day_of_week, [5, 6])) {
-                    if (strtotime($attandance->time_in) > strtotime($shift->start)) {
-                        $status = "LATE (6 Days Shift)";
+                } else {
+
+                    $lateStatus = $this->isLate($working_date, $attandance->time_in, $shift->start, $shift->end);
+
+                    if ($lateStatus) {
+
+                        $status = "LATE";
                         $late++;
-                        $remarks = "Masuk: " . $attandance->time_in . " (Sabtu/Jumat Shift)";
+                        $remarks = "Shift: " . $shift->start . " - " . $shift->end;
                         $color = "orange";
+
                     } else {
-                        $status = "ON TIME (6 Days Shift)";
-                        $remarks = "Masuk: " . $attandance->time_in;
+
+                        $status = "ON TIME";
+                        $remarks = "Shift: " . $shift->start . " - " . $shift->end;
                         $color = "green";
                     }
-                } elseif (strtotime($attandance->time_in) > strtotime($shift->start)) {
-                    $status = "LATE";
-                    $late++;
-                    $remarks = "Masuk: " . $attandance->time_in;
-                    $color = "orange";
-                } else {
-                    $status = "ON TIME";
-                    $remarks = "Masuk: " . $attandance->time_in;
-                    $color = "green";
                 }
 
                 // 9. ABSENCE/TIDAK HADIR
@@ -697,15 +767,36 @@ class Dashboard extends CI_Controller
             $this->db->where('a.permit_date', $working_date);
             $permit = $this->db->get()->row();
 
-            // Query Shift (Diambil yang paling awal)
+            // // Query Shift (Diambil yang paling awal)
+            // $this->db->select("d.start, d.end, d.days, d.tolerance, c.id as shift_id");
+            // $this->db->from('employees a');
+            // $this->db->join('shift_employees b', 'a.id = b.employee_id');
+            // $this->db->join('shifts c', 'c.id = b.shift_id');
+            // $this->db->join('shift_details d', 'd.shift_id = c.id');
+            // $this->db->where('a.number', $number);
+            // $this->db->order_by('d.start', 'ASC');
+            // $shift = $this->db->get()->row();
+
+            // ==========================================================
+            // GET ALL SHIFT DETAILS EMPLOYEE
+            // ==========================================================
             $this->db->select("d.start, d.end, d.days, d.tolerance, c.id as shift_id");
             $this->db->from('employees a');
             $this->db->join('shift_employees b', 'a.id = b.employee_id');
             $this->db->join('shifts c', 'c.id = b.shift_id');
             $this->db->join('shift_details d', 'd.shift_id = c.id');
             $this->db->where('a.number', $number);
-            $this->db->order_by('d.start', 'ASC');
-            $shift = $this->db->get()->row();
+
+            $shift_details = $this->db->get()->result();
+
+
+            // ==========================================================
+            // FIND CLOSEST SHIFT BASED ON TIME IN
+            // ==========================================================
+            $shift = $this->getClosestShiftDetail(
+                @$attandance->time_in,
+                $shift_details
+            );
 
             // Query Change Day
             $change_day = $this->mobile->read("change_days", ["*"], ["employee_id" => $employee->id, "start" => $working_date]);
@@ -775,16 +866,24 @@ class Dashboard extends CI_Controller
                         $working++;
                         $color = "green";
                     } elseif ($shift_days == "6" && $day_of_week == 6 && !empty($shift) && !empty($shift->start)) {
-                        if (strtotime($attandance->time_in) > strtotime($shift->start)) {
+                        $lateStatus = $this->isLate( $working_date, $attandance->time_in, $shift->start, $shift->end);
+
+                        if ($lateStatus) {
+
                             $status = "LATE";
                             $late++;
-                            $remarks = "Masuk: " . $attandance->time_in . " (Sabtu Shift)";
+                            $remarks = "Shift: " . $shift->start . " - " . $shift->end . " (Sabtu Shift)";
                             $color = "orange";
+
                         } else {
+
                             $status = "ON TIME";
-                            $remarks = "Masuk: " . $attandance->time_in . " (Sabtu Shift)";
+
+                            $remarks = "Shift: " . $shift->start . " - " . $shift->end ." (Sabtu Shift)";
+
                             $color = "green";
                         }
+
                         $working++;
                     } else {
                         $status = "ON TIME (Weekend Fallback)";
@@ -812,34 +911,32 @@ class Dashboard extends CI_Controller
 
                 // 8. HARI KERJA NORMAL (Ada absensi masuk)
             } elseif (!empty($attandance->time_in)) {
+
                 $working++;
 
                 if (empty($shift) || empty($shift->start)) {
+
                     $status = "ON TIME (UN SETTING)";
                     $remarks = "Check Shift Employee (No Shift Start Time)";
                     $color = "orange";
 
-                    // LOGIKA KHUSUS SHIFT 6 HARI KERJA (Jumat & Sabtu)
-                } elseif (@$shift->shift_id == '20241126000001' && in_array($day_of_week, [5, 6])) {
-                    if (strtotime($attandance->time_in) > strtotime($shift->start)) {
-                        $status = "LATE (6 Days Shift)";
+                } else {
+
+                    $lateStatus = $this->isLate($working_date, $attandance->time_in, $shift->start, $shift->end);
+
+                    if ($lateStatus) {
+
+                        $status = "LATE";
                         $late++;
-                        $remarks = "Masuk: " . $attandance->time_in . " (Sabtu/Jumat Shift)";
+                        $remarks = "Shift: " . $shift->start . " - " . $shift->end;
                         $color = "orange";
+
                     } else {
-                        $status = "ON TIME (6 Days Shift)";
-                        $remarks = "Masuk: " . $attandance->time_in;
+
+                        $status = "ON TIME";
+                        $remarks = "Shift: " . $shift->start . " - " . $shift->end;
                         $color = "green";
                     }
-                } elseif (strtotime($attandance->time_in) > strtotime($shift->start)) {
-                    $status = "LATE";
-                    $late++;
-                    $remarks = "Masuk: " . $attandance->time_in;
-                    $color = "orange";
-                } else {
-                    $status = "ON TIME";
-                    $remarks = "Masuk: " . $attandance->time_in;
-                    $color = "green";
                 }
 
                 // 9. ABSENCE/TIDAK HADIR
@@ -881,5 +978,92 @@ class Dashboard extends CI_Controller
             "late" => $late,
             "details" => $details
         )));
+    }
+
+
+    // Helpers untuk check shift terdekan
+    private function getClosestShiftDetail($timeIn, $shiftDetails)
+    {
+        if (empty($timeIn) || empty($shiftDetails)) {
+            return null;
+        }
+
+        $attendanceSeconds = $this->timeToSeconds($timeIn);
+
+        $closestShift = null;
+        $closestDiff = PHP_INT_MAX;
+
+        foreach ($shiftDetails as $detail) {
+
+            if (empty($detail->start)) {
+                continue;
+            }
+
+            $startSeconds = $this->timeToSeconds($detail->start);
+
+            // Selisih waktu biasa
+            $diff = abs($attendanceSeconds - $startSeconds);
+
+            // Selisih jika melewati midnight
+            $diff = min(
+                $diff,
+                86400 - $diff
+            );
+
+            if ($diff < $closestDiff) {
+                $closestDiff = $diff;
+                $closestShift = $detail;
+            }
+        }
+
+        return $closestShift;
+    }
+
+    private function timeToSeconds($time)
+    {
+        $parts = explode(':', $time);
+
+        return
+            ((int) $parts[0] * 3600) +
+            ((int) $parts[1] * 60) +
+            ((int) ($parts[2] ?? 0));
+    }
+
+    private function isLate($workingDate, $timeIn, $shiftStart, $shiftEnd)
+    {
+        $attendanceSeconds = $this->timeToSeconds($timeIn);
+
+        /*
+        * 24:00 = midnight.
+        */
+        if ($shiftStart === '24:00:00') {
+
+            // 00:00 tepat waktu
+            if ($attendanceSeconds == 0) {
+                return false;
+            }
+
+            /*
+            * Time antara 00:00 - 23:59
+            * Untuk summary berdasarkan trans_date:
+            * 23:36 -> sebelum midnight => ON TIME
+            * 00:25 -> setelah midnight  => LATE
+            */
+
+            // Jika jam masuk masih malam tanggal sebelumnya
+            if ($attendanceSeconds > 12 * 3600) {
+                return false;
+            }
+
+            // 00:01 - 23:59 dianggap sudah lewat 00:00
+            return true;
+        }
+
+        /*
+        * Shift biasa
+        */
+        $shiftStartSeconds = $this->timeToSeconds($shiftStart);
+
+        return $attendanceSeconds > $shiftStartSeconds;
     }
 }
