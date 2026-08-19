@@ -226,6 +226,10 @@ class Attandances extends CI_Controller
                             $date_in = $post['date_in'];
                             $foto = $this->mobile->upload('foto', ['png', 'jpg', 'jpeg'], 'assets/document/attendance/' . $folder . '/', ["number" => $user->number, "date_in" => $date_in], "attandances", "foto_out");
 
+                            // test
+                            // $time_now = $post['time_out'];
+                            // $date_now = $post['date_out'];
+
                             $this->db->select('*');
                             $this->db->from('attandances');
                             $this->db->where('number', $user->number);
@@ -233,7 +237,7 @@ class Attandances extends CI_Controller
                             $attandance_in = $this->db->get()->row();
 
                             $data = array(
-                                'number' => $user->number,
+                                'number' => trim($user->number),
                                 'date_out' => $date_now,
                                 'time_out' => $time_now,
                                 'foto_out' => @$foto,
@@ -242,6 +246,20 @@ class Attandances extends CI_Controller
                             );
 
                             if ($this->mobile->update('attandances', ["id" => @$attandance_in->id], $data, $user->username)) {
+
+                                $dataLogs = array(
+                                    'name' => $user->name,
+                                    'number' => trim($user->number),
+                                    'date_attendance' => $date_now,
+                                    'time_attendance' => $time_now,
+                                    'info_attendance' => "CHECK OUT",
+                                    'attendance_type' => $post['source'] ?? 'MOBILE',
+                                    "foto" => @$foto,
+                                    "shift_detail" => @$attandance_in->shift_detail,
+                                );
+
+                                $this->mobile->create('attendances_logs', $dataLogs, $user->username);
+
                                 die(json_encode(array(
                                     "title" => "Success",
                                     "message" => "Attendance Out Completed",
@@ -254,18 +272,131 @@ class Attandances extends CI_Controller
                             // $foto = $this->mobile->upload('foto', ['png', 'jpg', 'jpeg'], 'assets/document/attendance/', ["number" => $user->number], "attandances", "foto");
                             $foto = $this->mobile->upload('foto', ['png', 'jpg', 'jpeg'], 'assets/document/attendance/' . $folder . '/');
 
-                            $tolerance_hour_min = date("H:i:s", strtotime('-2 Hour', strtotime($post['time_in'])));
-                            $tolerance_hour_plus = date("H:i:s", strtotime('+2 Hour', strtotime($post['time_in'])));
+                            // $tolerance_hour_min = date("H:i:s", strtotime('-2 Hour', strtotime($post['time_in'])));
+                            // $tolerance_hour_plus = date("H:i:s", strtotime('+2 Hour', strtotime($post['time_in'])));
+                            // $this->db->select("d.start, d.end, d.days, d.working, d.tolerance, c.name, d.name as shift_name");
+                            // $this->db->from('shift_employees b');
+                            // $this->db->join('shifts c', 'c.id = b.shift_id');
+                            // $this->db->join('shift_details d', 'd.shift_id = c.id');
+                            // $this->db->where('b.employee_id', $employee->id);
+                            // $this->db->where("TIME(d.start) >=  TIME('$tolerance_hour_min') && TIME(d.start) <= TIME('$tolerance_hour_plus')");
+                            // $shift = $this->db->get()->row();
+
+
+                            // test
+                            // $time_now = $post['time_in'];
+                            // $date_now = $post['date_in'];
+
                             $this->db->select("d.start, d.end, d.days, d.working, d.tolerance, c.name, d.name as shift_name");
                             $this->db->from('shift_employees b');
                             $this->db->join('shifts c', 'c.id = b.shift_id');
                             $this->db->join('shift_details d', 'd.shift_id = c.id');
                             $this->db->where('b.employee_id', $employee->id);
-                            $this->db->where("TIME(d.start) >=  TIME('$tolerance_hour_min') && TIME(d.start) <= TIME('$tolerance_hour_plus')");
-                            $shift = $this->db->get()->row();
+
+                            $shifts = $this->db->get()->result();
+
+                            $shift = null;
+
+                            $previousShift = null;
+                            $previousDiff = PHP_INT_MAX;
+
+                            $nextShift = null;
+                            $nextDiff = PHP_INT_MAX;
+
+                            $timeInSeconds = strtotime($time_now);
+
+                            foreach ($shifts as $item) {
+
+                                /*
+                                * 24:00 dianggap 00:00
+                                */
+                                $startTime = $item->start == '24:00:00'
+                                    ? '00:00:00'
+                                    : $item->start;
+
+                                $shiftStartSeconds = strtotime($startTime);
+
+                                $diff = $timeInSeconds - $shiftStartSeconds;
+
+                                /*
+                                * Handle perbedaan hari / midnight
+                                */
+                                if ($diff > 43200) {
+                                    $diff -= 86400;
+                                } elseif ($diff < -43200) {
+                                    $diff += 86400;
+                                }
+
+                                /*
+                                * SHIFT SEBELUMNYA
+                                */
+                                if ($diff >= 0) {
+
+                                    if ($diff < $previousDiff) {
+                                        $previousDiff = $diff;
+                                        $previousShift = $item;
+                                    }
+
+                                /*
+                                * SHIFT BERIKUTNYA
+                                */
+                                } else {
+
+                                    $distance = abs($diff);
+
+                                    if ($distance < $nextDiff) {
+                                        $nextDiff = $distance;
+                                        $nextShift = $item;
+                                    }
+                                }
+                            }
+
+                            /*
+                             Jika shift berikutnya maksimal 3 jam,
+                             gunakan shift berikutnya.
+                            
+                             Contoh:
+                             13:00 → 16:00 = 3 jam
+                             → pilih 16:00
+                            */
+                            if ($nextShift && $nextDiff <= 10800) {
+
+                                $shift = $nextShift;
+
+                            }
+                            /*
+                             Kalau shift berikutnya lebih dari 3 jam,
+                             tetap gunakan shift sebelumnya.
+                            
+                             Contoh:
+                             12:00 → 16:00 = 4 jam
+                             → tetap 08:00
+                            */
+                            elseif ($previousShift) {
+
+                                $shift = $previousShift;
+
+                            }
+                            /*
+                             Kalau tidak ada shift sebelumnya,
+                             gunakan shift berikutnya.
+                            */
+                            elseif ($nextShift) {
+
+                                $shift = $nextShift;
+                            }
+
+
+                            /*
+                             Setelah shift ditemukan,
+                             ubah 24:00 menjadi 00:00.
+                            */
+                            if ($shift && $shift->start == '24:00:00') {
+                                $shift->start = '00:00:00';
+                            }
 
                             $data = array(
-                                'number' => $user->number,
+                                'number' => trim($user->number),
                                 'date_in' => $date_now,
                                 'time_in' => $time_now,
                                 'foto_in' => @$foto,
@@ -279,6 +410,20 @@ class Attandances extends CI_Controller
                             );
 
                             if ($this->mobile->create('attandances', $data, $user->username)) {
+
+                                $dataLogs = array(
+                                    'name' => $user->name,
+                                    'number' => trim($user->number),
+                                    'date_attendance' => $date_now,
+                                    'time_attendance' => $time_now,
+                                    'info_attendance' => "CHECK IN",
+                                    'attendance_type' => $post['source'] ?? 'MOBILE',
+                                    'foto' => @$foto,
+                                    'shift_detail' => @$shift->name,
+                                );
+
+                                $this->mobile->create('attendances_logs', $dataLogs, $user->username);
+
                                 die(json_encode(array(
                                     "title" => "Success",
                                     "message" => "Attendance In Completed",
@@ -286,7 +431,7 @@ class Attandances extends CI_Controller
                                     "results" => $shift
                                 )));
                             } else {
-                                show_error("Attendance In UnComplete");
+                                show_error("Attendance In Incomplete");
                             }
                         }
                     } else {
@@ -301,5 +446,129 @@ class Attandances extends CI_Controller
         } else {
             show_error("Cannot Process your request");
         }
+    }
+
+    // test untuk check shift
+    public function checkShift() {
+        // $time_now = date("H:i:s");
+
+        $time_now = '21:05:00';
+
+        $employee = $this->mobile->read("employees", [], ["number" => "01010201260001"]);
+
+        $this->db->select("d.start, d.end, d.days, d.working, d.tolerance, c.name, d.name as shift_name");
+        $this->db->from('shift_employees b');
+        $this->db->join('shifts c', 'c.id = b.shift_id');
+        $this->db->join('shift_details d', 'd.shift_id = c.id');
+        $this->db->where('b.employee_id', $employee->id);
+
+        $shifts = $this->db->get()->result();
+
+        $shift = null;
+
+        $previousShift = null;
+        $previousDiff = PHP_INT_MAX;
+
+        $nextShift = null;
+        $nextDiff = PHP_INT_MAX;
+
+        $timeInSeconds = strtotime($time_now);
+
+        foreach ($shifts as $item) {
+
+            /*
+            * 24:00 dianggap 00:00
+            */
+            $startTime = $item->start == '24:00:00'
+                ? '00:00:00'
+                : $item->start;
+
+            $shiftStartSeconds = strtotime($startTime);
+
+            $diff = $timeInSeconds - $shiftStartSeconds;
+
+            /*
+            * Handle perbedaan hari / midnight
+            */
+            if ($diff > 43200) {
+                $diff -= 86400;
+            } elseif ($diff < -43200) {
+                $diff += 86400;
+            }
+
+            /*
+            * SHIFT SEBELUMNYA
+            */
+            if ($diff >= 0) {
+
+                if ($diff < $previousDiff) {
+                    $previousDiff = $diff;
+                    $previousShift = $item;
+                }
+
+            /*
+            * SHIFT BERIKUTNYA
+            */
+            } else {
+
+                $distance = abs($diff);
+
+                if ($distance < $nextDiff) {
+                    $nextDiff = $distance;
+                    $nextShift = $item;
+                }
+            }
+        }
+
+        /*
+        * Jika shift berikutnya maksimal 3 jam,
+        * gunakan shift berikutnya.
+        *
+        * Contoh:
+        * 13:00 → 16:00 = 3 jam
+        * → pilih 16:00
+        */
+        if ($nextShift && $nextDiff <= 10800) {
+
+            $shift = $nextShift;
+
+        }
+        /*
+        * Kalau shift berikutnya lebih dari 3 jam,
+        * tetap gunakan shift sebelumnya.
+        *
+        * Contoh:
+        * 12:00 → 16:00 = 4 jam
+        * → tetap 08:00
+        */
+        elseif ($previousShift) {
+
+            $shift = $previousShift;
+
+        }
+        /*
+        * Kalau tidak ada shift sebelumnya,
+        * gunakan shift berikutnya.
+        */
+        elseif ($nextShift) {
+
+            $shift = $nextShift;
+        }
+
+
+        /*
+        * Setelah shift ditemukan,
+        * ubah 24:00 menjadi 00:00.
+        */
+        if ($shift && $shift->start == '24:00:00') {
+            $shift->start = '00:00:00';
+        }
+        
+        die(json_encode(array(
+            "title" => "Success",
+            "message" => "Data Found",
+            "theme" => "success",
+            "results" => $shift
+        )));
     }
 }

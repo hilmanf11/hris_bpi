@@ -256,8 +256,8 @@ class Auth extends CI_Controller
         if ($this->input->post()) {
             if ($this->form_validation->run() == TRUE) {
                 $post = $this->input->post();
-                $employee = $this->crud->read("employees", [], ["number" => $post['number'], "status" => 0]);
-                $users= $this->crud->read("users", [], ["number" => $post['number'], "status" => 0]);
+                $employee = $this->crud->read("employees", [], ["number" => trim($post['number']), "status" => 0]);
+                $users= $this->crud->read("users", [], ["number" => trim($post['number']), "status" => 0]);
                 $users_email = $this->crud->read("users", [], ["email" => $post['email'], "status" => 0]);
 
                  // cek apakah data employee kosong ?
@@ -302,7 +302,7 @@ class Auth extends CI_Controller
                         "id" => $id_users,
                         "created_date" => date('Y-m-d H:i:s'),
                         "created_by" => "admin",
-                        "number" => $post['number'],
+                        "number" => trim($employee->number),
                         "name" => $employee->name,
                         "description" => "MOBILE",
                         "email" => $post['email'],

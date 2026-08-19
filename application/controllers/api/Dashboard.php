@@ -198,6 +198,340 @@ class Dashboard extends CI_Controller
         }
     }
 
+    public function attendanceV2($api_key = "")
+    {
+        $this->output->delete_cache();
+
+        if (empty($api_key)) {
+            show_error("Cannot Process your request");
+            return;
+        }
+
+        // =========================================================
+        // 1. VALIDASI USER
+        // =========================================================
+
+        $user = $this->mobile->read("users", [], ["api_key" => $api_key]);
+
+        if (!$user) {
+            show_error("Api Key Invalid");
+            return;
+        }
+
+        $employee = $this->mobile->read("employees", [], ["number" => $user->number]);
+
+        if (!$employee) {
+            show_error("Employee not found");
+            return;
+        }
+
+
+        // =========================================================
+        // 2. CARI ATTENDANCE YANG BELUM CHECKOUT
+        //
+        // Jangan hanya cari hari ini.
+        // Karena attendance shift malam bisa:
+        //
+        // tgl 18 16:30 -> tgl 19 00:10
+        //
+        // atau:
+        //
+        // tgl 18 23:10 -> tgl 19 08:12
+        //
+        // =========================================================
+
+        $this->db->from('attandances');
+        $this->db->where('number',$user->number);
+        $this->db->where('time_out IS NULL',null,false);
+        $this->db->where('created_date >=',date('Y-m-d H:i:s', strtotime('-7 days'))); // ambil 7 hari terakhir
+        $this->db->order_by('date_in','DESC');
+        $this->db->order_by('time_in','DESC');
+        $this->db->limit(1);
+        $attandances = $this->db->get()->row();
+
+        // =========================================================
+        // 3. CEK APAKAH ATTENDANCE MASIH AKTIF
+        // =========================================================
+
+        if ($attandances) {
+            /*
+            * Ambil data shift dari attendance
+            */
+            $shiftStart = $attandances->shift_start;
+            $shiftEnd   = $attandances->shift_end;
+
+            $dateIn = $attandances->date_in;
+            $timeIn = $attandances->time_in;
+
+            /*
+            * =====================================================
+            * NORMALISASI 24:00
+            *
+            * 24:00 sebenarnya adalah 00:00 hari berikutnya.
+            * =====================================================
+            */
+
+            if ($shiftEnd == '24:00:00') {
+
+                $shiftEndTime = '00:00:00';
+
+            } else {
+
+                $shiftEndTime = $shiftEnd;
+            }
+
+            /*
+            * =====================================================
+            * TENTUKAN TANGGAL SHIFT END
+            * =====================================================
+            *
+            * Default:
+            *
+            * date_in + shift_end
+            *
+            * Tetapi ada beberapa kondisi yang harus +1 hari.
+            */
+
+            $shiftEndDate = $dateIn;
+
+            /*
+            * -----------------------------------------------------
+            * CASE 1
+            *
+            * Shift:
+            * 16:00 -> 24:00
+            *
+            * 24:00 berarti:
+            * 00:00 hari berikutnya
+            *
+            * -----------------------------------------------------
+            */
+
+            if ($shiftEnd == '24:00:00') {
+                $shiftEndDate = date('Y-m-d', strtotime($dateIn . ' +1 day'));
+            }
+
+
+            /*
+            * -----------------------------------------------------
+            * CASE 2
+            *
+            * Shift:
+            * 16:00 -> 04:00
+            *
+            * End lebih kecil dari start.
+            * Berarti melewati midnight.
+            * -----------------------------------------------------
+            */
+
+            elseif ( !empty($shiftStart) && $shiftEndTime <= $shiftStart) {
+                $shiftEndDate = date('Y-m-d',strtotime($dateIn . ' +1 day'));
+            }
+
+            /*
+            * -----------------------------------------------------
+            * CASE 3
+            *
+            * Shift:
+            * 00:00 -> 08:00
+            *
+            * Tetapi user check-in:
+            *
+            * tgl 18 23:10
+            *
+            * Maka shift end harus:
+            *
+            * tgl 19 08:00
+            *
+            * bukan:
+            *
+            * tgl 18 08:00
+            *
+            * -----------------------------------------------------
+            */
+
+            elseif (!empty($timeIn) && $timeIn > $shiftEndTime) {
+                $shiftEndDate = date('Y-m-d',strtotime($dateIn . ' +1 day'));
+            }
+
+            /*
+            * =====================================================
+            * BUAT DATETIME SHIFT END
+            * =====================================================
+            */
+
+            $shiftEnd = new DateTime($shiftEndDate . ' ' . $shiftEndTime);
+
+            /*
+            * =====================================================
+            * TOLERANSI CHECKOUT 2 JAM
+            * =====================================================
+            */
+
+            $shiftEndTolerance = clone $shiftEnd;
+            $shiftEndTolerance->modify('+2 hours');
+
+            /*
+            * Waktu sekarang
+            */
+
+            $now = new DateTime();
+
+            /*
+            * =====================================================
+            * CEK APAKAH MASIH DALAM WAKTU CHECKOUT
+            * =====================================================
+            *
+            * Contoh:
+            *
+            * Shift:
+            * 16:00 - 24:00
+            *
+            * End:
+            * 19 00:00
+            *
+            * Tolerance:
+            * 19 02:00
+            *
+            * Sekarang:
+            * 19 00:10
+            *
+            * MASIH AKTIF
+            *
+            *
+            * Contoh kedua:
+            *
+            * Shift:
+            * 00:00 - 08:00
+            *
+            * Check-in:
+            * 18 23:10
+            *
+            * End:
+            * 19 08:00
+            *
+            * Tolerance:
+            * 19 10:00
+            *
+            * Sekarang:
+            * 19 08:12
+            *
+            * MASIH AKTIF
+            */
+
+            if ($now > $shiftEndTolerance) {
+                $attandances = null;
+            }
+        }
+
+
+        // =========================================================
+        // 4. KALAU TIDAK ADA ATTENDANCE AKTIF
+        //    CARI ATTENDANCE HARI INI
+        // =========================================================
+
+        if (!$attandances) {
+            $attandances = $this->mobile->read( "attandances", [], [ "number" => $user->number, "date_in" => date("Y-m-d")],1);
+        }
+
+        // =========================================================
+        // 5. TENTUKAN SHIFT
+        // =========================================================
+
+        $shift = null;
+
+        /*
+        * Kalau attendance ditemukan,
+        * gunakan shift yang tersimpan pada attendance.
+        *
+        * Jangan query shift_details->row()
+        * karena employee bisa mempunyai 3 shift.
+        */
+
+        if ($attandances) {
+            $shift = (object) [
+                'start'         => $attandances->shift_start,
+                'end'           => $attandances->shift_end,
+                'shift_name'    => @$attandances->shift_name,
+                'name'          => @$attandances->shift_detail,
+            ];
+        } else {
+            $this->db->select("d.start, d.end, d.days, d.working, d.tolerance, c.name, d.name as shift_name");
+            $this->db->from('shift_employees b');
+            $this->db->join('shifts c', 'c.id = b.shift_id');
+            $this->db->join('shift_details d', 'd.shift_id = c.id');
+            $this->db->where('b.employee_id', $employee->id);
+            $shift = $this->db->get()->row();
+        }
+
+
+        // =========================================================
+        // 6. FOTO MASUK
+        // =========================================================
+
+        if ($attandances && !empty($attandances->foto_in)) {
+            $folder = date("Ym", strtotime($attandances->date_in));
+            $foto_in = 'assets/document/attendance/' . $folder . '/' . $attandances->foto_in;
+        } else {
+            $foto_in = null;
+        }
+
+        // =========================================================
+        // 7. FOTO KELUAR
+        // =========================================================
+
+        if ( $attandances && !empty($attandances->foto_out)) {
+            $folder = date( "Ym", strtotime($attandances->date_out));
+            $foto_out = 'assets/document/attendance/' . $folder . '/' . $attandances->foto_out;
+        } else {
+            $foto_out = null;
+        }
+
+
+        // =========================================================
+        // 8. NORMALISASI SHIFT UNTUK RESPONSE
+        //
+        // Database:
+        // 24:00:00
+        //
+        // API:
+        // 00:00:00
+        // =========================================================
+
+        if ($shift) {
+            if ( isset($shift->start) && $shift->start == '24:00:00') {
+                $shift->start = '00:00:00';
+            }
+
+            if (isset($shift->end) && $shift->end == '24:00:00') {
+                $shift->end = '00:00:00';
+            }
+        }
+
+
+        // =========================================================
+        // 9. RESPONSE
+        // =========================================================
+
+        die(json_encode(array(
+            "title" => "Success",
+            "message" => "Data Found",
+            "theme" => "success",
+            "results" => array(
+                "start" => @$shift->start,
+                "end" => @$shift->end,
+                "shift_name" => @$shift->shift_name,
+                "shift_detail" => @$shift->name,
+                "date_in" => @$attandances->date_in,
+                "date_out" => @$attandances->date_out,
+                "time_in" => @$attandances->time_in,
+                "time_out" => @$attandances->time_out,
+                "foto_in" => $foto_in,
+                "foto_out" => $foto_out,
+            )
+        )));
+    }
+
     public function users($api_key = "")
     {
         $this->output->delete_cache();
