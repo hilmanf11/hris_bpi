@@ -153,7 +153,10 @@ class Mobile extends CI_Model
             $extension_final = strtolower(end($extension_explode));
             $size = $_FILES[$filename]['size'];
             $temporary = $_FILES[$filename]['tmp_name'];
-            $newname  = round(microtime(true)) . '.' . $extension_final;
+
+            // $newname  = round(microtime(true)) . '_' . $prefix . '.' . $extension_final;
+
+            $newname = round(microtime(true)) . '_' . bin2hex(random_bytes(8)) . '.' . $extension_final;
 
             if (in_array($extension_final, $extension) === true || $file == "") {
                 if ($size < 2097152) {
