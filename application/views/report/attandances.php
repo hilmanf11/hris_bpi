@@ -49,6 +49,7 @@
                         <option value="ON TIME">ON TIME</option>
                         <option value="LATE">LATE</option>
                         <option value="ABSENCE">ABSENCE</option>
+                        <option value="NOT COMPLETE">NOT COMPLETE</option>
                     </select>
                 </div>
             </div>

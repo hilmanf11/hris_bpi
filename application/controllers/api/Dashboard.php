@@ -93,6 +93,9 @@ class Dashboard extends CI_Controller
             "is_permits" => 'Y',
             "is_add_permit" => 'Y',
             "is_cancel_permit" => 'Y',
+            "version" => '1.0.1',
+            "link" => '', 
+            "info" => 'Terdapat versi terbaru, silakan update.',
         ];
 
         die(json_encode(array(
@@ -117,7 +120,7 @@ class Dashboard extends CI_Controller
                 // Cari attendance yang belum checkout
                 $this->db->from('attandances');
                 $this->db->where('number', $user->number);
-                $this->db->where('time_out IS NULL', null, false);
+                $this->db->where('(time_out IS NULL OR time_out = "" OR time_out = "00:00:00")', null, false);
                 $this->db->order_by('date_in', 'DESC');
                 $this->db->order_by('time_in', 'DESC');
                 $this->db->limit(1);
@@ -125,39 +128,80 @@ class Dashboard extends CI_Controller
 
                 // Jika ada attendance yang belum checkout
                 if ($attandances) {
+                    $checkin_time = (!empty($attandances->time_in) && $attandances->time_in != '00:00:00') 
+                        ? $attandances->time_in 
+                        : ($attandances->shift_start ?: '08:00:00');
+                    $checkin_ts = strtotime($attandances->date_in . ' ' . $checkin_time);
+                    $durasi_detik = time() - $checkin_ts;
 
-                    // Hitung waktu shift selesai
-                    $shiftEnd = new DateTime($attandances->date_in . ' ' . $attandances->shift_end);
+                    $checkin_sec = $this->timeToSeconds($checkin_time);
+                    $time_now_sec = $this->timeToSeconds(date("H:i:s"));
 
-                    // Jika shift melewati tengah malam
-                    if ($attandances->shift_end <= $attandances->shift_start) {
-                        $shiftEnd->modify('+1 day');
+                    // Cek apakah open attendance ini sudah kedaluwarsa karena sudah masuk jendela shift baru:
+                    // 1. Check-in pagi/siang (< 14:00) tapi sekarang sudah jam malam (>= 21:30 atau <= 04:00)
+                    $is_expired_by_next_shift = false;
+                    if ($checkin_sec < 50400 && ($time_now_sec >= 77400 || $time_now_sec <= 14400)) {
+                        $is_expired_by_next_shift = true;
+                    }
+                    // 2. Check-in malam (>= 19:00) tapi sekarang sudah siang (>= 12:00 dan < 19:00)
+                    if ($checkin_sec >= 68400 && $time_now_sec >= 43200 && $time_now_sec < 68400) {
+                        $is_expired_by_next_shift = true;
                     }
 
-                    // Tambah toleransi checkout 2 jam
-                    $shiftEnd->modify('+2 hours');
-
-                    $now = new DateTime();
-
-                    // Jika sudah melewati batas checkout
-                    if ($now > $shiftEnd) {
+                    // Toleransi max stay 16 jam atau expired oleh shift baru
+                    if ($durasi_detik > 57600 || $durasi_detik < 0 || $is_expired_by_next_shift) {
                         $attandances = null;
                     }
                 }
 
-                // Kalau tidak ada attendance aktif, ambil attendance hari ini
-                if (!$attandances) {
-                    $attandances = $this->mobile->read(
-                        "attandances", [], ["number" => $user->number, "date_in" => date("Y-m-d")], 1, "", "", ["number", "date_in"]
-                    );
-                }
-
+                // Ambil daftar detail shift karyawan
                 $this->db->select("d.start, d.end, d.days, d.working, d.tolerance, c.name, d.name as shift_name");
                 $this->db->from('shift_employees b');
                 $this->db->join('shifts c', 'c.id = b.shift_id');
                 $this->db->join('shift_details d', 'd.shift_id = c.id');
                 $this->db->where('b.employee_id', $employee->id);
-                $shift = $this->db->get()->row();
+                $shift_details = $this->db->get()->result();
+
+                // Filter shift aktif sesuai hari (weekday vs weekend/Sabtu untuk 6 HK)
+                $active_shifts = $this->filterActiveShifts($shift_details, date("Y-m-d"));
+
+                // Kalau tidak ada attendance aktif, cari apakah sudah ada presensi yang selesai hari ini
+                if (!$attandances) {
+                    $date_today = date("Y-m-d");
+                    $time_now = date("H:i:s");
+                    $current_ts = time();
+
+                    $this->db->from('attandances');
+                    $this->db->where('number', $user->number);
+                    $this->db->where('time_out IS NOT NULL AND time_out != "" AND time_out != "00:00:00"', null, false);
+                    $this->db->where('(date_in = "' . $date_today . '" OR date_out = "' . $date_today . '")');
+                    $this->db->order_by('id', 'DESC');
+                    $this->db->limit(1);
+                    $last_closed = $this->db->get()->row();
+
+                    if ($last_closed) {
+                        $checkout_ts = strtotime($last_closed->date_out . ' ' . $last_closed->time_out);
+                        $elapsed_after_checkout = $current_ts - $checkout_ts;
+
+                        // Jika shift normal hari ini (Shift 1/2/non-shift) sudah checkout -> tampilkan sudah selesai
+                        if ($last_closed->date_in == $date_today) {
+                            $attandances = $last_closed;
+                        } 
+                        // Jika shift malam (Shift 3 atau Security Malam) yang checkout pagi ini:
+                        // Tampilkan sudah selesai selama dalam masa istirahat (kurang dari 8 jam ATAU belum masuk jendela shift baru)
+                        elseif ($last_closed->date_out == $date_today) {
+                            if ($elapsed_after_checkout < 28800 || !$this->isNearUpcomingNightShift($time_now, $active_shifts, $last_closed->shift_start)) {
+                                $attandances = $last_closed;
+                            }
+                        }
+                    }
+                }
+
+                $ref_time = !empty($attandances->time_in) ? $attandances->time_in : date("H:i:s");
+                $shift = $this->getClosestShiftDetail($ref_time, $active_shifts, $employee->id, date("Y-m-d"));
+                if (!$shift && !empty($active_shifts)) {
+                    $shift = $active_shifts[0];
+                }
 
                 if (!empty($attandances->foto_in)) {
                     $folder = date("Ym", strtotime($attandances->date_in));
@@ -178,10 +222,10 @@ class Dashboard extends CI_Controller
                     "message" => "Data Found",
                     "theme" => "success",
                     "results" => array(
-                        "start" => @$shift->start,
-                        "end" => @$shift->end,
-                        "shift_name" => @$shift->shift_name,
-                        "shift_detail" => @$shift->name,
+                        "start" => !empty($attandances->shift_start) ? $attandances->shift_start : @$shift->start,
+                        "end" => !empty($attandances->shift_end) ? $attandances->shift_end : @$shift->end,
+                        "shift_name" => !empty($attandances->shift_name) ? $attandances->shift_name : @$shift->shift_name,
+                        "shift_detail" => !empty($attandances->shift_detail) ? $attandances->shift_detail : @$shift->name,
                         "date_in" => @$attandances->date_in,
                         "date_out" => @$attandances->date_out,
                         "time_in" => @$attandances->time_in,
@@ -663,19 +707,26 @@ class Dashboard extends CI_Controller
                     }
 
                     //Shift and Setting Group
-                    $tolerance_hour_min = date("H:i:s", strtotime('-2 Hour', strtotime(@$attandance->time_in)));
-                    $tolerance_hour_plus = date("H:i:s", strtotime('+2 Hour', strtotime(@$attandance->time_in)));
                     $this->db->select("d.start, d.end, d.days, d.working, d.tolerance, c.name, d.name as shift_name");
                     $this->db->from('shift_employees b');
                     $this->db->join('shifts c', 'c.id = b.shift_id');
                     $this->db->join('shift_details d', 'd.shift_id = c.id');
                     $this->db->where('b.employee_id', $employee->id);
-                    if (@$attandance->time_in > "23:00:00") {
-                        $this->db->where("d.start >= '$tolerance_hour_min'");
-                    } elseif (@$attandance->time_in != "") {
-                        $this->db->where("d.start >= '$tolerance_hour_min' and d.start <= '$tolerance_hour_plus'");
+                    $emp_shifts = $this->db->get()->result();
+                    $active_emp_shifts = $this->filterActiveShifts($emp_shifts, $today);
+
+                    $shift = null;
+                    if (!empty($attandance->shift_start)) {
+                        foreach ($active_emp_shifts as $es) {
+                            if ($es->start == $attandance->shift_start) {
+                                $shift = $es;
+                                break;
+                            }
+                        }
                     }
-                    $shift = $this->db->get()->row();
+                    if (!$shift && !empty($attandance->time_in)) {
+                        $shift = $this->getClosestShiftDetail($attandance->time_in, $active_emp_shifts);
+                    }
 
                     if (@$attandance->time_in == null) {
                         if (@$permit->employee_id != null) {
@@ -686,18 +737,27 @@ class Dashboard extends CI_Controller
                             $color = "red";
                         }
                     } else {
-                        if (@$shift->start >= @$attandance->time_in) {
-                            $attandance_status = "ON TIME";
-                            $color = "green";
-                        } elseif (@$shift->start == null) {
+                        if ($shift == null || empty($shift->start)) {
                             $attandance_status = "UN SETTING";
                             $color = "red";
-                        } elseif (@$shift->start <= @$attandance->time_in) {
-                            $attandance_status = "LATE";
-                            $color = "orange";
                         } else {
-                            $attandance_status = "ERROR";
-                            $color = "red";
+                            $start_clean = ($shift->start === '24:00:00') ? '00:00:00' : $shift->start;
+                            $st_sec = $this->timeToSeconds($start_clean);
+                            $in_sec = $this->timeToSeconds($attandance->time_in);
+
+                            if ($st_sec == 0 && $in_sec >= 79200) {
+                                $diff = - (86400 - $in_sec);
+                            } else {
+                                $diff = $in_sec - $st_sec;
+                            }
+
+                            if ($diff <= 0) {
+                                $attandance_status = "ON TIME";
+                                $color = "green";
+                            } else {
+                                $attandance_status = "LATE";
+                                $color = "orange";
+                            }
                         }
                     }
 
@@ -831,7 +891,9 @@ class Dashboard extends CI_Controller
             // ==========================================================
             $shift = $this->getClosestShiftDetail(
                 @$attandance->time_in,
-                $shift_details
+                $shift_details,
+                $employee->id,
+                $working_date
             );
 
             // Query Change Day
@@ -1129,7 +1191,9 @@ class Dashboard extends CI_Controller
             // ==========================================================
             $shift = $this->getClosestShiftDetail(
                 @$attandance->time_in,
-                $shift_details
+                $shift_details,
+                $employee->id,
+                $working_date
             );
 
             // Query Change Day
@@ -1315,8 +1379,8 @@ class Dashboard extends CI_Controller
     }
 
 
-    // Helpers untuk check shift terdekan
-    private function getClosestShiftDetail($timeIn, $shiftDetails)
+    // Helpers untuk check shift terdekat termasuk lembur awal
+    private function getClosestShiftDetail($timeIn, $shiftDetails, $employee_id = null, $date = null)
     {
         if (empty($timeIn) || empty($shiftDetails)) {
             return null;
@@ -1333,7 +1397,17 @@ class Dashboard extends CI_Controller
                 continue;
             }
 
-            $startSeconds = $this->timeToSeconds($detail->start);
+            $start_val = ($detail->start === '24:00:00') ? '00:00:00' : $detail->start;
+
+            // Jika ada lembur awal di cash_carries, jadikan jam mulai lembur sebagai patokan IN
+            if (!empty($employee_id) && !empty($date)) {
+                $ot_early = $this->get_early_overtime($employee_id, $date, $detail->start);
+                if ($ot_early && !empty($ot_early->start)) {
+                    $start_val = ($ot_early->start === '24:00:00') ? '00:00:00' : $ot_early->start;
+                }
+            }
+
+            $startSeconds = $this->timeToSeconds($start_val);
 
             // Selisih waktu biasa
             $diff = abs($attendanceSeconds - $startSeconds);
@@ -1351,6 +1425,66 @@ class Dashboard extends CI_Controller
         }
 
         return $closestShift;
+    }
+
+    /**
+     * Cari data lembur awal di tabel cash_carries untuk karyawan pada tanggal tertentu.
+     */
+    private function get_early_overtime($employee_id, $date, $shift_start)
+    {
+        if (empty($employee_id) || empty($date) || empty($shift_start)) {
+            return null;
+        }
+
+        $this->db->select('*');
+        $this->db->from('cash_carries');
+        $this->db->where('employee_id', $employee_id);
+        $this->db->where('trans_date', $date);
+        $this->db->where('deleted', 0);
+        $overtimes = $this->db->get()->result();
+
+        if (empty($overtimes)) {
+            return null;
+        }
+
+        $shift_start_norm = ($shift_start == '24:00:00') ? '00:00:00' : $shift_start;
+        $shift_start_ts   = strtotime("1970-01-01 " . $shift_start_norm);
+
+        $matched_ot = null;
+        $earliest_start_ts = PHP_INT_MAX;
+
+        foreach ($overtimes as $ot) {
+            if (empty($ot->start)) continue;
+
+            $ot_start_norm = ($ot->start == '24:00:00') ? '00:00:00' : $ot->start;
+            $ot_end_norm   = !empty($ot->end) ? (($ot->end == '24:00:00') ? '00:00:00' : $ot->end) : $ot_start_norm;
+
+            $ot_start_ts = strtotime("1970-01-01 " . $ot_start_norm);
+            $ot_end_ts   = strtotime("1970-01-01 " . $ot_end_norm);
+
+            // Shift siang/pagi/reguler (bukan midnight 00:00:00)
+            if ($shift_start_norm !== '00:00:00') {
+                if ($ot_start_ts < $shift_start_ts) {
+                    $gap_to_shift = $shift_start_ts - $ot_end_ts;
+                    if ($ot_end_ts >= $shift_start_ts || $gap_to_shift <= 3600 || ($shift_start_ts - $ot_start_ts <= 28800)) {
+                        if ($ot_start_ts < $earliest_start_ts) {
+                            $earliest_start_ts = $ot_start_ts;
+                            $matched_ot = $ot;
+                        }
+                    }
+                }
+            } else {
+                // Shift malam (start 00:00:00 / midnight)
+                if ($ot_start_ts >= strtotime("1970-01-01 18:00:00")) {
+                    if ($ot_start_ts < $earliest_start_ts) {
+                        $earliest_start_ts = $ot_start_ts;
+                        $matched_ot = $ot;
+                    }
+                }
+            }
+        }
+
+        return $matched_ot;
     }
 
     private function timeToSeconds($time)
@@ -1399,5 +1533,91 @@ class Dashboard extends CI_Controller
         $shiftStartSeconds = $this->timeToSeconds($shiftStart);
 
         return $attendanceSeconds > $shiftStartSeconds;
+    }
+
+    // Filter detail shift aktif berdasarkan hari (Weekday vs Weekend) sesuai logika Qrattandances
+    private function filterActiveShifts($all_shifts, $date)
+    {
+        if (empty($all_shifts)) {
+            return [];
+        }
+
+        $is_saturday = (date('N', strtotime($date)) == 6);
+        $active_shifts = [];
+
+        if ($is_saturday) {
+            foreach ($all_shifts as $s) {
+                $working_type = isset($s->working) ? strtoupper($s->working) : 'WEEKDAY';
+                if ($working_type === 'WEEKEND') {
+                    $active_shifts[] = $s;
+                } else {
+                    $has_weekend_counterpart = false;
+                    foreach ($all_shifts as $other) {
+                        if (isset($other->working) && strtoupper($other->working) === 'WEEKEND' && $other->start == $s->start) {
+                            $has_weekend_counterpart = true;
+                            break;
+                        }
+                    }
+                    if (!$has_weekend_counterpart) {
+                        $active_shifts[] = $s;
+                    }
+                }
+            }
+        } else {
+            foreach ($all_shifts as $s) {
+                $working_type = isset($s->working) ? strtoupper($s->working) : 'WEEKDAY';
+                if ($working_type !== 'WEEKEND') {
+                    $active_shifts[] = $s;
+                }
+            }
+        }
+
+        return !empty($active_shifts) ? $active_shifts : $all_shifts;
+    }
+
+    // Cek apakah waktu saat ini sudah mendekati waktu mulai shift malam berikutnya (maks 2.5 jam sebelum shift)
+    private function isNearUpcomingNightShift($timeNow, $activeShifts, $lastShiftStart = null)
+    {
+        $targetStart = null;
+
+        if (!empty($lastShiftStart)) {
+            $start_val = ($lastShiftStart === '24:00:00') ? '00:00:00' : $lastShiftStart;
+            $start_sec = $this->timeToSeconds($start_val);
+            if ($start_sec >= 61200 || $start_sec <= 14400) {
+                $targetStart = $start_val;
+            }
+        }
+
+        if (empty($targetStart) && !empty($activeShifts)) {
+            foreach ($activeShifts as $shift) {
+                if (empty($shift->start)) continue;
+                $st = ($shift->start === '24:00:00') ? '00:00:00' : $shift->start;
+                $en = ($shift->end === '24:00:00') ? '00:00:00' : $shift->end;
+                $st_sec = $this->timeToSeconds($st);
+                $en_sec = $this->timeToSeconds($en);
+
+                if ($en_sec < $st_sec || $st_sec >= 61200 || $st_sec <= 14400) {
+                    $targetStart = $st;
+                    break;
+                }
+            }
+        }
+
+        if (empty($targetStart)) {
+            return false;
+        }
+
+        $nowSec = $this->timeToSeconds($timeNow);
+        $targetSec = $this->timeToSeconds($targetStart);
+
+        $diff_before = ($targetSec - $nowSec + 86400) % 86400;
+
+        // Maksimal 2.5 jam sebelum shift mulai ($diff_before <= 9000)
+        // Atau maksimal 4 jam setelah shift mulai ($diff_before >= 72000)
+        if ($diff_before <= 9000 || $diff_before >= 72000) {
+            return true;
+        }
+
+        return false;
     }
 }

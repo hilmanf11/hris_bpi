@@ -227,6 +227,7 @@ class Attandances extends CI_Controller
                 $sts_changeday = 0;
                 $sts_permit = 0;
                 $sts_overtime = 0;
+                $sts_not_complete = 0;
 
                 for ($i = $start; $i <= $finish; $i += (60 * 60 * 24)) {
                     $working_date = date('Y-m-d', $i);
@@ -434,12 +435,31 @@ class Attandances extends CI_Controller
                                 $style_status = "style='color:orange; font-weight:bold;'";
                                 $sts_unsetting += 1;
                             }
+                            // NOT COMPLETE: ada time_in tapi tidak ada time_out
+                            if (!empty(@$attandance->time_in) && (empty(@$attandance->time_out) || @$attandance->time_out == '00:00:00')) {
+                                $attandance_status = "NOT COMPLETE";
+                                // $style_status = "style='color:purple; font-weight:bold;'";
+                                $sts_not_complete += 1;
+                            }
                         }
                     }
 
                     if ($filter_status != "" or $filter_permit_type != "") {
                         if ($holiday == "") {
-                            if ($filter_status == $attandance_status) {
+                            if ($filter_status == "NOT COMPLETE" && $attandance_status == "NOT COMPLETE") {
+                                $html .= '<tr ' . $style . '>
+                                                    <td>' . $no . '</td>
+                                                    <td>' . date('d F Y', strtotime($working_date)) . '</td>
+                                                    <td>' . $shiftName . '</td>
+                                                    <td>' . @$shift->start . '</td>
+                                                    <td>' . @$shift->end . '</td>
+                                                    <td>' . @$attandance->time_in . '</td>
+                                                    <td>' . @$attandance->time_out . '</td>
+                                                    <td>' . @$cash_carry->total_duration . '</td>
+                                                    <td ' . $style_status . '>' . $attandance_status . '</td>
+                                                    <td>' . $holiday . '</td>
+                                                </tr>';
+                            } elseif ($filter_status == $attandance_status) {
                                 $html .= '<tr ' . $style . '>
                                                     <td>' . $no . '</td>
                                                     <td>' . date('d F Y', strtotime($working_date)) . '</td>
@@ -752,7 +772,7 @@ class Attandances extends CI_Controller
                 
                 $sts_workingday = 0; $sts_ontime = 0; $sts_uncheckin = 0; $sts_unsetting = 0;
                 $sts_late = 0; $sts_absence = 0; $sts_weekend = 0; $sts_changeday = 0;
-                $sts_permit = 0; $sts_overtime = 0;
+                $sts_permit = 0; $sts_overtime = 0; $sts_not_complete = 0;
 
                 for ($i = $start; $i <= $finish; $i += (60 * 60 * 24)) {
                     $working_date = date('Y-m-d', $i);
@@ -936,12 +956,19 @@ class Attandances extends CI_Controller
                                 $style_status = "style='color:orange; font-weight:bold;'";
                                 $sts_unsetting += 1;
                             }
+                            // NOT COMPLETE: ada time_in tapi tidak ada time_out, atau ada time_out tapi tidak ada time_in
+                            if ((!empty(@$attandance->time_in) && (empty(@$attandance->time_out) || @$attandance->time_out == '00:00:00'))
+                                || (!empty(@$attandance->time_out) && (empty(@$attandance->time_in) || @$attandance->time_in == '00:00:00'))) {
+                                $attandance_status = "NOT COMPLETE";
+                                // $style_status = "style='color:purple; font-weight:bold;'";
+                                $sts_not_complete += 1;
+                            }
                         }
                     }
 
                     if ($filter_status != "" or $filter_permit_type != "") {
                         if ($holiday_txt == "") {
-                            if ($filter_status == $attandance_status || $attandance_status == @strtoupper($filter_permit_type)) {
+                            if ($filter_status == "NOT COMPLETE" && $attandance_status == "NOT COMPLETE") {
                                 $html .= '<tr ' . $style . '>
                                             <td>' . $no . '</td>
                                             <td>' . date('d F Y', strtotime($working_date)) . '</td>
@@ -951,7 +978,20 @@ class Attandances extends CI_Controller
                                             <td>' . @$attandance->time_in . '</td>
                                             <td>' . @$attandance->time_out . '</td>
                                             <td>' . @$cash_carry->total_duration . '</td>
-                                            <td ' . $style_status . '>' . $attandance_status . '</td>
+                                            <td ' . $style_status . '>' . $status_masuk . '</td>
+                                            <td>' . $holiday_txt . '</td>
+                                        </tr>';
+                            } elseif ($filter_status == $attandance_status || $attandance_status == @strtoupper($filter_permit_type)) {
+                                $html .= '<tr ' . $style . '>
+                                            <td>' . $no . '</td>
+                                            <td>' . date('d F Y', strtotime($working_date)) . '</td>
+                                            <td>' . $shiftName . '</td>
+                                            <td>' . @$shift->start . '</td>
+                                            <td>' . @$shift->end . '</td>
+                                            <td>' . @$attandance->time_in . '</td>
+                                            <td>' . @$attandance->time_out . '</td>
+                                            <td>' . @$cash_carry->total_duration . '</td>
+                                            <td ' . $style_status . '>' . $status_masuk . '</td>
                                             <td>' . $holiday_txt . '</td>
                                         </tr>';
                             }

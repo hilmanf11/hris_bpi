@@ -280,8 +280,13 @@ class Payrolls extends CI_Controller
             LEFT JOIN maritals q ON a.marital_id = q.id
             JOIN privilege_groups m ON (i.id = m.group_id or m.group_id is null or m.group_id = '') and m.username = '$username' and m.status = '1'
             -- LEFT JOIN ke tabel resignations
-            LEFT JOIN resignations r ON a.id = r.employee_id and r.status=0
-            WHERE a.deleted = 0 and a.status = 0
+            LEFT JOIN resignations r ON a.id = r.employee_id
+            WHERE a.deleted = 0
+            -- Karyawan aktif (tanpa record resign) ATAU karyawan resign yang tanggal resign-nya masih dalam periode cut-off payroll
+            AND (
+                (r.employee_id IS NULL AND a.status = 0)
+                OR (r.employee_id IS NOT NULL AND r.resign_date >= '$filter_from' AND r.resign_date <= '$filter_to')
+            )
             -- Filter untuk mengecualikan status UN PROCEDURE (tetap menampilkan yang bukan UN PROCEDURE atau yang NULL/belum resign)
             AND (r.status_resign IS NULL OR r.status_resign != 'UN PROCEDURE')
             AND a.division_id LIKE '%$filter_division%'
@@ -630,18 +635,16 @@ class Payrolls extends CI_Controller
             $hkw = (@count($weekday_day) - @$calendar_amount);
             $absen = (@count($weekday_day) - @$calendar_amount - @$attandance_amount - @$changeDays_amount - @$arr_total_permit_absence_no - $arr_total_permit_absence);
 
-            //Hitung Hari dia masuk kerja
-            $working_days = ($attandance_amount + $arr_total_permit_absence + @$changeDays_amount);
+            //Hitung Hari dia masuk kerja (Kehadiran fisik + permit absence YES + permit absence NO/Cuti + Change Days)
+            $working_days = ($attandance_amount + $arr_total_permit_absence + @$arr_total_permit_absence_no + @$changeDays_amount);
 
-            //Jika hari kerja nya lebih besar dari HKW maka nilai ambil HKW
+            //Jika hari kerja nya lebih besar dari HKW maka nilai maksimal adalah HKW
             if ($working_days >= $hkw) {
-                $wd = $hkw;
+                $masuk = $hkw;
             } else {
-                $wd = $working_days;
+                $masuk = $working_days;
             }
-
-            //Total Masuk kerja
-            $masuk = @$wd + @$arr_total_permit_absence_no;
+            $wd = $masuk;
 
             //Perhitungan Salary (Gaji Pokok)
             if (strtolower(@$record['status_karyawan']) == 'resign') {

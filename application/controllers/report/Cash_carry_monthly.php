@@ -35,7 +35,7 @@ class Cash_carry_monthly extends CI_Controller
         if ($option == "excel") {
             $format = date("Ymd");
             header("Content-type: application/vnd-ms-excel");
-            header("Content-Disposition: attachment; filename=report_cash_carry_$format.xls");
+            header("Content-Disposition: attachment; filename=report_monthly_cash_carry_$format.xls");
         }
 
         if ($this->input->get()) {
@@ -160,14 +160,14 @@ class Cash_carry_monthly extends CI_Controller
                         $group_data = 'ALL';
                     }
 
-                    if (empty($record['time_in']) || empty($record['time_out'])) {
+                    if (empty($record['att_time_in']) || empty($record['att_time_out'])) {
                         $att_hour = 0;
                     } else {
-                        $att_time_begin = strtotime($record['trans_date'] . " " . $record['time_in']);
-                        $att_time_end   = strtotime($record['trans_date'] . " " . $record['time_out']);
+                        $att_time_begin = strtotime($record['trans_date'] . " " . $record['att_time_in']);
+                        $att_time_end   = strtotime($record['trans_date'] . " " . $record['att_time_out']);
 
                         if ($att_time_end < $att_time_begin) {
-                            $att_time_end = strtotime($record['trans_date'] . " " . $record['time_out'] . " +1 days");
+                            $att_time_end = strtotime($record['trans_date'] . " " . $record['att_time_out'] . " +1 days");
                         }
 
                         $break = isset($record['break']) ? $record['break'] : 0;
@@ -192,10 +192,30 @@ class Cash_carry_monthly extends CI_Controller
 
                     $cc_hour = $record['duration_hour'];
                     $hour    = ($att_hour > $cc_hour) ? $cc_hour : $att_hour;
-                    $meal    = @$record['meal_amount'];
+                    $meal    = ($record['meal'] == 0) ? 0 : @$record['total_meal'];
 
-                    $total = ((@$record['amount_perhour'] * $hour) + $meal);
-                    $row_total = $total;
+                    // Category detection (sama dengan Cash_carry report)
+                    $this->db->select('trans_date');
+                    $this->db->from('calendars');
+                    $this->db->where('trans_date', $record['trans_date']);
+                    $calendars = $this->db->get()->result_array();
+
+                    $is_holiday_calendar = (count($calendars) > 0);
+                    $day_of_week         = date('w', $start);
+
+                    if ($is_holiday_calendar) {
+                        $ot_type = 'holiday';
+                    } else {
+                        if ($day_of_week === '0') {
+                            $ot_type = 'sunday';
+                        } else if ($day_of_week === '6') {
+                            $ot_type = 'saturday';
+                        } else {
+                            $ot_type = 'weekday';
+                        }
+                    }
+
+                    $amount = ($record['amount_perhour'] * $hour) + $meal;
 
                     $emp_id = $record['employee_id'];
 
@@ -207,13 +227,28 @@ class Cash_carry_monthly extends CI_Controller
                             'departement_sub_name' => $record['departement_sub_name'],
                             'payment_type'         => $record['payment_type'],
                             'bank_no'              => $record['bank_no'],
+                            'weekday_amount'       => 0,
+                            'saturday_amount'      => 0,
+                            'sunday_amount'        => 0,
+                            'holiday_amount'       => 0,
                             'total_hour'           => 0,
                             'total_amount'         => 0
                         );
                     }
 
+                    // Akumulasi per kategori OT
+                    if ($ot_type == 'weekday') {
+                        $grouped_data[$emp_id]['weekday_amount'] += $amount;
+                    } else if ($ot_type == 'saturday') {
+                        $grouped_data[$emp_id]['saturday_amount'] += $amount;
+                    } else if ($ot_type == 'sunday') {
+                        $grouped_data[$emp_id]['sunday_amount'] += $amount;
+                    } else if ($ot_type == 'holiday') {
+                        $grouped_data[$emp_id]['holiday_amount'] += $amount;
+                    }
+
                     $grouped_data[$emp_id]['total_hour']   += $hour;
-                    $grouped_data[$emp_id]['total_amount'] += $row_total;
+                    $grouped_data[$emp_id]['total_amount'] += $amount;
                 }
 
                 $user_data = $this->db->select('a.departement_id')
@@ -256,7 +291,8 @@ class Cash_carry_monthly extends CI_Controller
                     #reportTable { border-collapse: collapse; width: 95%; margin: 0 auto; font-size: 12px; }
                     #reportTable th, #reportTable td { border: 1px solid #000; padding: 5px 8px; }
                     #reportTable th { background-color: #ffffff; text-align: center; font-weight: bold; font-size: 13px; }
-                    .grandtotal-all { background-color: #bfbfbf; font-weight: bold; }
+                    .grandtotal-all { background-color: #bfbfbf; font-weight: bold; font-size: 14px; }
+                    .grandtotal-all td { font-weight: bold; font-size: 14px; }
                     
                     .approval-container { width: 95%; margin: 25px auto 0 auto; text-align: center; }
                     .approval-table { border-collapse: collapse; width: 600px; margin: 0 auto; font-size: 12px; }
@@ -332,93 +368,92 @@ class Cash_carry_monthly extends CI_Controller
                     }else{
                         $source = $row['bank_no'];
                     }
+
+                    // Pembulatan per kategori OT lalu dijumlahkan (sama dengan Cash_carry report)
+                    $row['weekday_amount'] = round($row['weekday_amount'], -3);
+                    $row['saturday_amount'] = round($row['saturday_amount'], -3);
+                    $row['sunday_amount'] = round($row['sunday_amount'], -3);
+                    $row['holiday_amount'] = round($row['holiday_amount'], -3);
+                    $total_amount_rounded = $row['weekday_amount'] + $row['saturday_amount'] + $row['sunday_amount'] + $row['holiday_amount'];
+                    $total_amount_val = ($option == "excel") ? $total_amount_rounded : number_format($total_amount_rounded, 2);
+
                     // Render Baris Karyawan langsung berurutan nama
                     $html .= '<tr>
                                 <td style="text-align:center;">' . $no . '</td>
-                                <td>' . $row['employee_number'] . '</td>
+                                <td style="mso-number-format:\@;">' . $row['employee_number'] . '</td>
                                 <td>' . $row['employee_name'] . '</td>
-                                <td style="text-align:center;">' . $source . '</td>
-                                <td style="text-align:right;">' . number_format(round($row['total_amount'],-3), 2) . '</td>
+                                <td style="text-align:center; mso-number-format:\@;">' . $source . '</td>
+                                <td style="text-align:right;">' . $total_amount_val . '</td>
                                 <td></td>
                             </tr>';
 
-                    $grand_total_all += round($row['total_amount'],-3);
+                    $grand_total_all += $total_amount_rounded;
                     $no++;
                 }
 
+                $grand_total_all_val = ($option == "excel") ? $grand_total_all : number_format($grand_total_all, 2);
+
                 // Hanya menampilkan Grand Total Keseluruhan di akhir tabel
-                $html .= '<tr class="grandtotal-all">
-                            <td colspan="4" style="text-align:right;">Grand Total</td>
-                            <td style="text-align:right;">' . number_format($grand_total_all, 2) . '</td>
-                            <td></td>
+                $html .= '<tr class="grandtotal-all" style="font-weight: bold; font-size: 14px;">
+                            <td colspan="4" style="text-align:right; font-weight: bold; font-size: 14px;">Grand Total</td>
+                            <td style="text-align:right; font-weight: bold; font-size: 14px;">' . $grand_total_all_val . '</td>
+                            <td style="font-weight: bold; font-size: 14px;"></td>
                         </tr>';
 
                 $html .= '</tbody></table>';
 
-
-                // 1. Generate QR Code untuk Approval 1 & 2 (jika datanya ada)
-                $qr_path_1 = '';
-                $qr_path_2 = '';
-                if($apr_sts == 1){
-
-                    // if (!empty($approval->name_approval_1)) {
-                        // Memanggil method bawaan kamu untuk generate gambar
+                // TABEL APPROVAL (Hanya ditampilkan jika bukan export Excel)
+                if ($option != "excel") {
+                    // 1. Generate QR Code untuk Approval 1 & 2 (jika datanya ada)
+                    $qr_path_1 = '';
+                    $qr_path_2 = '';
+                    if ($apr_sts == 1) {
                         $this->createQrcode('Lhuvita Rachmadhanti', "assets/image/qrcode/");
                         
-                        // Path ke file gambar yang dihasilkan (sesuaikan penamaan file dari method createQrcode kamu)
                         $img_src_1 = base_url("assets/image/qrcode/" . 'Lhuvita Rachmadhanti' . ".png");
                         $qr_path_1 = '<img src="' . $img_src_1 . '" width="80" height="80" />';
-                    // }
-
-                    
-                    // if (!empty($approval->name_approval_2)) {
+                        
                         $this->createQrcode('Yusman Nugraha Utama', "assets/image/qrcode/");
                         
                         $img_src_2 = base_url("assets/image/qrcode/" . 'Yusman Nugraha Utama' . ".png");
                         $qr_path_2 = '<img src="' . $img_src_2 . '" width="80" height="80" />';
-                    // }
-
-                    // if (!empty($approval->name_approval_3)) {
+                        
                         $this->createQrcode('Faris Fahdian', "assets/image/qrcode/");
                         
                         $img_src_3 = base_url("assets/image/qrcode/" . 'Faris Fahdian' . ".png");
                         $qr_path_3 = '<img src="' . $img_src_3 . '" width="80" height="80" />';
-                    // }
+                    } else {
+                        $qr_path_1 = '';
+                        $qr_path_2 = '';
+                    }
 
-                }else{
-                    $qr_path_1 = '';
-                    $qr_path_2 = '';
-                    // $approval->name_approval_2 = '';
-                    // $approval->name_approval_1 = '';
+                    // TABEL APPROVAL
+                    $html .= '<div class="approval-container">
+                            <table class="approval-table">
+                                <tr>
+                                    <th width="33%">Approved</th>
+                                    <th width="33%">Approved</th>
+                                    <th width="34%">Prepared</th>
+                                </tr>
+                                <tr>
+                                    <td class="approval-space"></td>
+                                    <td class="approval-space">' . $qr_path_2 . '</td>
+                                    <td class="approval-space">' . $qr_path_1 . '</td>
+                                </tr>
+                                <tr>
+                                    <td class="approval-position">ACCOUNTING & FINANCE</td>
+                                    <td class="approval-position">GENERAL MANAGER</td>
+                                    <td class="approval-position">HRD</td>
+                                </tr>
+                                <tr>
+                                    <td class="approval-name">Faris Fahdian</td>
+                                    <td class="approval-name">Yusman Nugraha Utama</td>
+                                    <td class="approval-name">Lhuvita Rachmadhanti</td>
+                                </tr>
+                            </table>
+                            <div class="clearfix"></div>
+                        </div>';
                 }
-                    
-
-                // TABEL APPROVAL
-                $html .= '<div class="approval-container">
-                        <table class="approval-table">
-                            <tr>
-                                <th width="33%">Approved</th>
-                                <th width="33%">Approved</th>
-                                <th width="34%">Prepared</th>
-                            </tr>
-                            <tr>
-                                <td class="approval-space"></td>
-                                <td class="approval-space">' . $qr_path_2 . '</td>
-                                <td class="approval-space">' . $qr_path_1 . '</td>
-                            </tr>
-                            <tr>
-                                <td class="approval-position">ACCOUNTING & FINANCE</td>
-                                <td class="approval-position">GENERAL MANAGER</td>
-                                <td class="approval-position">HRD</td>
-                            </tr>
-                            <tr>
-                                <td class="approval-name">Faris Fahdian</td>
-                                <td class="approval-name">Yusman Nugraha Utama</td>
-                                <td class="approval-name">Lhuvita Rachmadhanti</td>
-                            </tr>
-                        </table>
-                        <div class="clearfix"></div>
-                    </div>';
 
                 $html .= '</body></html>';
                 

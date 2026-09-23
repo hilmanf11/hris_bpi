@@ -519,7 +519,7 @@
 				$('#dg_approval').datagrid({
 					singleSelect: true,
 					rownumbers: true,
-					url: '<?= base_url('approvals/approvalUsers/') ?>' + approved_to + "/" + created_by,
+					url: '<?= base_url('approvals/approvalUsers/') ?>' + encodeURIComponent(approved_to) + "/" + encodeURIComponent(created_by),
 					columns: [
 						[{
 							field: 'number',
@@ -587,7 +587,7 @@
 				$('#dg_approval').datagrid({
 					singleSelect: true,
 					rownumbers: true,
-					url: '<?= base_url('approvals/approvalAgreements/') ?>' + approved_to + "/" + created_by,
+					url: '<?= base_url('approvals/approvalAgreements/') ?>' + encodeURIComponent(approved_to) + "/" + encodeURIComponent(created_by),
 					columns: [
 						[{
 							field: 'number',
@@ -665,7 +665,7 @@
 				$('#dg_approval').datagrid({
 					singleSelect: true,
 					rownumbers: true,
-					url: '<?= base_url('approvals/approvalMutations/') ?>' + approved_to + "/" + created_by,
+					url: '<?= base_url('approvals/approvalMutations/') ?>' + encodeURIComponent(approved_to) + "/" + encodeURIComponent(created_by),
 					columns: [
 						[{
 							field: 'employee_number',
@@ -811,7 +811,7 @@
 				$('#dg_approval').datagrid({
 					singleSelect: true,
 					rownumbers: true,
-					url: '<?= base_url('approvals/approvalOvertimes/') ?>' + approved_to + "/" + created_by,
+					url: '<?= base_url('approvals/approvalOvertimes/') ?>' + encodeURIComponent(approved_to) + "/" + encodeURIComponent(created_by),
 					columns: [
 						[{
 							field: 'employee_id',
@@ -907,7 +907,7 @@
 				$('#dg_approval').datagrid({
 					singleSelect: true,
 					rownumbers: true,
-					url: '<?= base_url('approvals/approvalCashCarries/') ?>' + approved_to + "/" + created_by,
+					url: '<?= base_url('approvals/approvalCashCarries/') ?>' + encodeURIComponent(approved_to) + "/" + encodeURIComponent(created_by),
 					columns: [
 						[{
 							field: 'employee_id',
@@ -994,7 +994,7 @@
 				$('#dg_approval').datagrid({
 					singleSelect: true,
 					rownumbers: true,
-					url: '<?= base_url('approvals/approvalCashCarry/') ?>' + approved_to + "/" + created_by,
+					url: '<?= base_url('approvals/approvalCashCarry/') ?>' + encodeURIComponent(approved_to) + "/" + encodeURIComponent(created_by),
 					columns: [
 						[{
 							field: 'employee_id',
@@ -1081,7 +1081,7 @@
 				$('#dg_approval').datagrid({
 					singleSelect: true,
 					rownumbers: true,
-					url: '<?= base_url('approvals/approvalChangeDays/') ?>' + approved_to + "/" + created_by,
+					url: '<?= base_url('approvals/approvalChangeDays/') ?>' + encodeURIComponent(approved_to) + "/" + encodeURIComponent(created_by),
 					columns: [
 						[{
 							field: 'employee_id',
@@ -1156,7 +1156,7 @@
 					singleSelect: true,
 					rownumbers: true,
 					showFooter: true,
-					url: '<?= base_url('approvals/approvalPayrolls/') ?>' + approved_to + "/" + created_by,
+					url: '<?= base_url('approvals/approvalPayrolls/') ?>' + encodeURIComponent(approved_to) + "/" + encodeURIComponent(created_by),
 					columns: [
 						[{
 							field: 'group_name',
@@ -1208,7 +1208,7 @@
 				$('#dg_approval').datagrid({
 					singleSelect: true,
 					rownumbers: true,
-					url: '<?= base_url('approvals/approvalSetupSalary/') ?>' + approved_to + "/" + created_by,
+					url: '<?= base_url('approvals/approvalSetupSalary/') ?>' + encodeURIComponent(approved_to) + "/" + encodeURIComponent(created_by),
 					columns: [
 						[{
 							field: 'employee_id',
@@ -1289,7 +1289,7 @@
 				$('#dg_approval').datagrid({
 					singleSelect: true,
 					rownumbers: true,
-					url: '<?= base_url('approvals/approvalWarningLetters/') ?>' + approved_to + "/" + created_by,
+					url: '<?= base_url('approvals/approvalWarningLetters/') ?>' + encodeURIComponent(approved_to) + "/" + encodeURIComponent(created_by),
 					columns: [
 						[{
 							field: 'employee_id',
@@ -1370,7 +1370,7 @@
 				$('#dg_approval').datagrid({
 					singleSelect: true,
 					rownumbers: true,
-					url: '<?= base_url('approvals/approvalResignations/') ?>' + approved_to + "/" + created_by,
+					url: '<?= base_url('approvals/approvalResignations/') ?>' + encodeURIComponent(approved_to) + "/" + encodeURIComponent(created_by),
 					columns: [
 						[{
 							field: 'employee_id',

@@ -688,9 +688,12 @@ class Cash_carries extends CI_Controller
                     $this->db->where('a.deleted', 0);
                     $this->db->where('a.status', 0);
                     $this->db->where("(a.approved_to = '' or a.approved_to is null)");
+                    if ($filter_from != "" && $filter_to != "") {
+                        $this->db->where('a.trans_date >=', $filter_from);
+                        $this->db->where('a.trans_date <=', $filter_to);
+                    }
                     $this->db->where('a.employee_id =', $cash_carry['employee_id']);
-                    $this->db->group_by("a.employee_id");
-                    $this->db->order_by('b.name', 'ASC');
+                    $this->db->order_by('a.trans_date', 'ASC');
                     $records = $this->db->get()->result_array();
 
                     $total = 0;

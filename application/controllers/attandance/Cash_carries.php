@@ -123,13 +123,11 @@ class Cash_carries extends CI_Controller
         $allowance_cash_carries = $this->crud->read("allowance_cash_carries", [], ["id" => @$setup_cash_carries->allowance_id]);
 
         if(empty($setup_cash_carries)){
-            echo  json_encode(array("title" => "Not Found", "message" => "($data_employee->number - $data_employee->name) Data Setup Overtimes Not Found", "theme" => "danger"));
-            exit();
+            return false;
         }
 
         if(empty($allowance_cash_carries)){
-            echo  json_encode(array("title" => "Not Found", "message" => "($data_employee->number - $data_employee->name) Data Allowance Overtimes Not Found", "theme" => "danger"));
-            exit();
+            return false;
         }
 
         //ambil durasi berapa jam jika ada lemburan
@@ -242,7 +240,7 @@ class Cash_carries extends CI_Controller
         $departement_id = $this->input->post('departement_id');
         $departement_sub_id = $this->input->post('departement_sub_id');
 
-        $this->db->select('a.time_in, a.time_out, b.id, c.overtime_duration');
+        $this->db->select('a.time_in, a.time_out, a.shift_start, b.id, c.overtime_duration');
         $this->db->from('employees b');
         $this->db->join('groups c', 'b.group_id = c.id');
         $this->db->join('attandances a', "a.number = b.number and a.date_in = '$period'", 'left');
@@ -285,16 +283,19 @@ class Cash_carries extends CI_Controller
             $ot_amount = $this->readOvertimePrice($employee['id'], $period, $employee['overtime_duration'], 0);
 
             //Shift and Setting Group
-            $tolerance_hour_min = date("H:i:s", strtotime('-2 Hour', strtotime(@$employee['time_in'])));
-            $tolerance_hour_plus = date("H:i:s", strtotime('+2 Hour', strtotime(@$employee['time_in'])));
             $this->db->select("d.ot_start, d.ot_end");
             $this->db->from('shift_employees b');
             $this->db->join('shifts c', 'c.id = b.shift_id');
             $this->db->join('shift_details d', 'd.shift_id = c.id');
             $this->db->where('b.employee_id', $employee['id']);
-            if (@$employee['time_in'] > "23:00:00") {
+            if (!empty($employee['shift_start'])) {
+                $this->db->where("d.start", $employee['shift_start']);
+            } elseif (@$employee['time_in'] > "23:00:00") {
+                $tolerance_hour_min = date("H:i:s", strtotime('-2 Hour', strtotime(@$employee['time_in'])));
                 $this->db->where("d.start >= '$tolerance_hour_min'");
             } elseif (@$employee['time_in'] != "") {
+                $tolerance_hour_min = date("H:i:s", strtotime('-2 Hour', strtotime(@$employee['time_in'])));
+                $tolerance_hour_plus = date("H:i:s", strtotime('+4 Hour', strtotime(@$employee['time_in'])));
                 $this->db->where("d.start >= '$tolerance_hour_min' and d.start <= '$tolerance_hour_plus'");
             }
             $shift = $this->db->get()->row();
@@ -517,6 +518,13 @@ class Cash_carries extends CI_Controller
             $duration = $this->convertHour($trans_date, $start, $end, $employee_id, $break);
             $data_amount = $this->readOvertimePrice($employee_id, $trans_date, $duration['duration_hour'], $meal);
 
+            if ($data_amount === false) {
+                $data_employee = $this->crud->read("employees", [], ["id" => $employee_id]);
+                $emp_info = $data_employee ? "($data_employee->number - $data_employee->name)" : "";
+                echo json_encode(array("title" => "Not Found", "message" => "$emp_info Data Setup / Allowance Overtimes Not Found", "theme" => "error"));
+                return;
+            }
+
             $post_final = array(
                 "trans_date" =>  $trans_date,
                 "employee_id" =>  $employee_id,
@@ -553,23 +561,44 @@ class Cash_carries extends CI_Controller
         }
     }
 
-    public function createGenerate(){
+    public function createGenerate()
+    {
         if ($this->input->post()) {
             $post = $this->input->post();
 
             $cash_carries = $this->crud->reads('cash_carries', [], [
                 "employee_id" => $post['employee_id'], 
-                "trans_date" => $post['trans_date'], 
-                "type" => $post['type']
+                "trans_date"  => $post['trans_date'], 
+                "type"        => $post['type']
             ]);
 
+            $employee = $this->crud->read('employees', [], ["id" => $post['employee_id']]);
+            $emp_info = !empty($employee) ? ($employee->number . " - " . $employee->name) : $post['employee_id'];
+
             if (count($cash_carries) > 0) {
-                echo json_encode(array("title" => "Duplicate", "message" => "Overtime has been created", "theme" => "error"));
+                echo json_encode(array("title" => "Duplicate", "message" => $emp_info . " | Overtime has been created", "theme" => "error"));
             } else {
+                // Ekstrak amount jika dikirim dalam bentuk array/object dari JS generate
+                $amount_data = $post['amount'];
+                if (is_array($amount_data)) {
+                    $post['amount']         = isset($amount_data['amount']) ? $amount_data['amount'] : 0;
+                    $post['amount_perhour'] = isset($amount_data['amount_perhour']) ? $amount_data['amount_perhour'] : 0;
+                    $post['meal_amount']    = isset($amount_data['meal_amount']) ? $amount_data['meal_amount'] : 0;
+                } else {
+                    $post['amount']         = 0;
+                    $post['amount_perhour'] = 0;
+                    $post['meal_amount']    = 0;
+                }
+
                 $send = $this->crud->create('cash_carries', $post);
-                echo $send;
+                $res = json_decode($send, true);
+                if (is_array($res) && isset($res['theme']) && $res['theme'] == 'success') {
+                    echo json_encode(array("title" => "Created", "message" => $emp_info . " | " . $post['trans_date'] . " Generate Overtime Success", "theme" => "success"));
+                } else {
+                    echo json_encode(array("title" => "Failed", "message" => $emp_info . " | " . $post['trans_date'] . " Failed to Generate", "theme" => "error"));
+                }
             }
-        }else{
+        } else {
             show_error("Cannot Process your request");
         }
     }
@@ -824,29 +853,33 @@ class Cash_carries extends CI_Controller
                         $data_amount = $this->readOvertimePrice($employee->id, $data['trans_date'], $duration['duration_hour'], $meal);
 
                         $post_cash_carries = array(
-                            'employee_id' => $employee->id,
-                            'trans_date' => $data['trans_date'],
-                            'request_code' => $templatefinal,
-                            'request_name' => $this->session->name,
-                            'start' => $data['start'],
-                            'end' => $data['end'],
-                            'break' => $break,
-                            'type' => $data['type'],
-                            'meal' => $meal,
-                            'meal_amount' => $data_amount['meal_amount'],
-                            'plan' => $data['plan'],
-                            'actual' => $data['actual'],
-                            "duration" =>  $duration['duration'],
-                            "duration_hour" => $duration['duration_hour'],
-                            'remarks' => $data['remarks'],
-                            'amount' =>  $data_amount['amount'],
-                            'amount_perhour' =>  $data_amount['amount_perhour'],
-                            'idm_no' => $data['idm_no'],
-                            'attachment_idm' => $data['attachment_idm']
+                            'employee_id'    => $employee->id,
+                            'trans_date'     => $data['trans_date'],
+                            'request_code'   => $templatefinal,
+                            'request_name'   => $this->session->name,
+                            'start'          => $data['start'],
+                            'end'            => $data['end'],
+                            'break'          => $break,
+                            'type'           => $data['type'],
+                            'meal'           => $meal,
+                            'meal_amount'    => $data_amount['meal_amount'],
+                            'plan'           => isset($data['plan']) ? $data['plan'] : NULL,
+                            'actual'         => isset($data['actual']) ? $data['actual'] : NULL,
+                            "duration"       => $duration['duration'],
+                            "duration_hour"  => $duration['duration_hour'],
+                            'remarks'        => isset($data['remarks']) ? $data['remarks'] : NULL,
+                            'amount'         => $data_amount['amount'],
+                            'amount_perhour' => $data_amount['amount_perhour'],
+                            'idm_no'         => isset($data['idm_no']) ? $data['idm_no'] : NULL,
+                            'attachment_idm' => isset($data['attachment_idm']) ? $data['attachment_idm'] : NULL
                         );
 
                         $send = $this->crud->create('cash_carries', $post_cash_carries);
-                        echo $send;
+                        if ($send) {
+                            echo json_encode(array("title" => "Created", "message" => $employee->name . " | " . $data['trans_date'] . " Create Cash Carry", "theme" => "success"));
+                        } else {
+                            echo json_encode(array("title" => "Failed", "message" => $employee->name . " | Failed to Create Cash Carry", "theme" => "error"));
+                        }
                     }
                 } else {
                     echo json_encode(array("title" => "Not Found", "message" => $data['number'] . " Employee ID Not Found", "theme" => "error"));
@@ -925,7 +958,7 @@ class Cash_carries extends CI_Controller
         }
         $this->db->group_by('a.trans_date');
         $this->db->group_by('a.employee_id');
-        $this->db->group_by('a.type');
+        $this->db->group_by('a.request_code');
         $this->db->order_by('a.trans_date', 'DESC');
         $records = $this->db->get()->result_array();
 

@@ -326,6 +326,7 @@
                             departement_sub_id: departement_sub,
                         },
                         success: function(result) {
+                            // console.log(result);
                             var json = eval('(' + result + ')');
                             Swal.close();
                             $('#dlg_generate').dialog('open');
@@ -343,6 +344,7 @@
                                         type: 'post',
                                         data: json['rows'][number - 1],
                                         success: function(note) {
+                                            console.log(note);
                                             var result = eval('(' + note + ')');
                                             if (result.theme == "success") {
                                                 var title = "<b style='color: green;'>" + result.title + "</b> | " + result.message;
@@ -906,6 +908,11 @@
                     endEditing();
 
                     if (idm_no != "" && request_code != "" && totalrows > 0) {
+                        if (!$('#frm_insert').form('validate')) {
+                            toastr.info("Please fill all required fields");
+                            return;
+                        }
+
                         Swal.fire({
                             title: 'Please Wait for Save Data',
                             showConfirmButton: false,
@@ -916,62 +923,113 @@
                             },
                         });
 
-                        $('#frm_insert').form('submit', {
-                            url: '<?= base_url('attandance/cash_carries/uploadFile') ?>',
-                            method: 'POST',
-                            onSubmit: function() {
-                                return $(this).form('validate');
-                            },
-                            success: function(data) {
-                                var data = eval('(' + data + ')');
-                                var file_attachment = data.attachment;
-                                var file_attachment_idm = data.attachment_idm;
-                            }
-                        });
+                        var formData = new FormData($('#frm_insert')[0]);
 
-                        for (let i = 0; i < totalrows; i++) {
-                            if (rows[i].start) {
-                                $.ajax({
-                                    type: "post",
-                                    url: url_save,
-                                    data: {
-                                        trans_date: trans_date,
-                                        request_code: request_code,
-                                        request_name: request_name,
-                                        idm_no: idm_no,
-                                        type: type,
-                                        attachment: file_attachment,
-                                        attachment_idm: file_attachment_idm,
-                                        employee_id: rows[i].employee_id,
-                                        start: rows[i].start,
-                                        end: rows[i].end,
-                                        meal: rows[i].meal,
-                                        plan: rows[i].plan,
-                                        actual: rows[i].actual,
-                                        break: rows[i].break,
-                                        remarks: rows[i].remarks
-                                    },
-                                    dataType: "json",
-                                    success: function(result) {
-                                        //Swal.close();
+                        $.ajax({
+                            url: '<?= base_url('attandance/cash_carries/uploadFile') ?>',
+                            type: 'POST',
+                            data: formData,
+                            contentType: false,
+                            processData: false,
+                            dataType: 'json',
+                            success: function(resData) {
+                                resData = resData || {};
+                                var file_attachment = resData.attachment || "";
+                                var file_attachment_idm = resData.attachment_idm || "";
+
+                                var errorMessages = [];
+                                var savePromises = [];
+
+                                for (let i = 0; i < totalrows; i++) {
+                                    if (rows[i].start) {
+                                        var p = $.ajax({
+                                            type: "post",
+                                            url: url_save,
+                                            data: {
+                                                trans_date: trans_date,
+                                                request_code: request_code,
+                                                request_name: request_name,
+                                                idm_no: idm_no,
+                                                type: type,
+                                                attachment: file_attachment,
+                                                attachment_idm: file_attachment_idm,
+                                                employee_id: rows[i].employee_id,
+                                                start: rows[i].start,
+                                                end: rows[i].end,
+                                                meal: rows[i].meal,
+                                                plan: rows[i].plan,
+                                                actual: rows[i].actual,
+                                                break: rows[i].break,
+                                                remarks: rows[i].remarks
+                                            },
+                                            dataType: "json"
+                                        }).done(function(result) {
+                                            if (result && result.theme === "error") {
+                                                errorMessages.push(result.message || "Failed to save row " + (i + 1));
+                                            } else if (typeof result === "string" && result.indexOf("theme") !== -1) {
+                                                try {
+                                                    var parsed = JSON.parse(result);
+                                                    if (parsed.theme === "error") {
+                                                        errorMessages.push(parsed.message);
+                                                    }
+                                                } catch(e){}
+                                            }
+                                        }).fail(function(jqXHR, textStatus, errorThrown) {
+                                            var msg = "Server Error on row " + (i + 1);
+                                            if (jqXHR.responseJSON && jqXHR.responseJSON.message) {
+                                                msg = jqXHR.responseJSON.message;
+                                            }
+                                            errorMessages.push(msg);
+                                        });
+                                        savePromises.push(p);
                                     }
+                                }
+
+                                if (savePromises.length === 0) {
+                                    Swal.close();
+                                    toastr.warning("No rows with start time to save");
+                                    return;
+                                }
+
+                                function finishSaving() {
+                                    Swal.close();
+                                    if (errorMessages.length > 0) {
+                                        Swal.fire({
+                                            title: "Error Saving Data",
+                                            html: errorMessages.join("<br>"),
+                                            icon: "error",
+                                            confirmButtonText: 'Ok'
+                                        });
+                                    } else {
+                                        Swal.fire({
+                                            title: "Save Cash Carries Success",
+                                            icon: "success",
+                                            confirmButtonText: 'Ok',
+                                            allowOutsideClick: false,
+                                        }).then((result) => {
+                                            if (result.isConfirmed) {
+                                                location.reload();
+                                            }
+                                        });
+                                    }
+                                }
+
+                                if (savePromises.length === 1) {
+                                    savePromises[0].always(finishSaving);
+                                } else {
+                                    $.when.apply($, savePromises).always(finishSaving);
+                                }
+                            },
+                            error: function() {
+                                Swal.close();
+                                Swal.fire({
+                                    title: "Upload Failed",
+                                    text: "Failed to upload attachments. Please try again.",
+                                    icon: "error",
+                                    confirmButtonText: 'Ok'
                                 });
                             }
-                        }
-
-                        setTimeout(function() {
-                            Swal.close();
-                            Swal.fire({
-                                title: "Save Cash Carries Success",
-                                icon: "success",
-                                confirmButtonText: 'Ok',
-                                allowOutsideClick: false,
-                            }).then((result) => {
-                                if (result.isConfirmed) {
-                                    location.reload();
-                                }
-                            });
-                        }, 5000);
+                        });
 
                         $('#dlg_insert').dialog('close');
                     } else {

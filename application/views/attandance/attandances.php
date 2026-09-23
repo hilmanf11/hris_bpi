@@ -363,6 +363,7 @@
                             }
                         },
                         success: function(result) {
+                            console.log(result);
                             $.messager.progress('close');
 
                             //Clear File

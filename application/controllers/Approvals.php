@@ -465,6 +465,12 @@ class Approvals extends CI_Controller
             $avatar = $foto;
         }
 
+        if($table == "cash_carries"){
+            $table_txt = "overtimes";
+        }else{
+            $table_txt = $table;
+        }
+
         $link = "approvalDetail('" . addslashes($table) . "', '" . addslashes($approved_to) . "', '" . addslashes($created_by) . "')";
         echo '  <li class="list-isi">
                     <a onclick="' . $link . '">
@@ -478,7 +484,7 @@ class Approvals extends CI_Controller
                                 </td>
                                 <td style="padding-left: 10px;">
                                     <b>' . $fullname . '</b><br>
-                                    <small>Sent a request to approve data <b>' . strtoupper(str_replace("_", " ", $table)) . '</b></small>
+                                    <small>Sent a request to approve data <b>' . strtoupper(str_replace("_", " ", $table_txt)) . '</b></small>
                                 </td>
                             </tr>
                         </table>
@@ -488,6 +494,9 @@ class Approvals extends CI_Controller
 
     public function approvalUsers($approved_to, $created_by)
     {
+        $approved_to = urldecode($approved_to);
+        $created_by = urldecode($created_by);
+
         $this->db->select('*');
         $this->db->from('users a');
         $this->db->where('approved_to', $approved_to);
@@ -500,6 +509,9 @@ class Approvals extends CI_Controller
 
     public function approvalAgreements($approved_to, $created_by)
     {
+        $approved_to = urldecode($approved_to);
+        $created_by = urldecode($created_by);
+
         $this->db->select('a.*, 
                 b.name as employee_name, 
                 c.name as division_name, 
@@ -525,6 +537,9 @@ class Approvals extends CI_Controller
 
     public function approvalMutations($approved_to, $created_by)
     {
+        $approved_to = urldecode($approved_to);
+        $created_by = urldecode($created_by);
+
         $this->db->select('a.*, 
                 b.number as employee_number, 
                 b.name as employee_name, 
@@ -578,6 +593,9 @@ class Approvals extends CI_Controller
 
     public function approvalOvertimes($approved_to, $created_by)
     {
+        $approved_to = urldecode($approved_to);
+        $created_by = urldecode($created_by);
+
         $this->db->select('a.*,
                 c.name as division_name,
                 d.name as departement_name,
@@ -608,6 +626,9 @@ class Approvals extends CI_Controller
 
     public function approvalCashCarries($approved_to, $created_by)
     {
+        $approved_to = urldecode($approved_to);
+        $created_by = urldecode($created_by);
+
         $this->db->select('a.*, 
                 c.name as division_name,
                 d.name as departement_name,
@@ -638,6 +659,9 @@ class Approvals extends CI_Controller
 
     public function approvalCashCarry($approved_to, $created_by)
     {
+        $approved_to = urldecode($approved_to);
+        $created_by = urldecode($created_by);
+
         $this->db->select('a.*, 
                 c.name as division_name,
                 d.name as departement_name,
@@ -668,6 +692,9 @@ class Approvals extends CI_Controller
 
     public function approvalChangeDays($approved_to, $created_by)
     {
+        $approved_to = urldecode($approved_to);
+        $created_by = urldecode($created_by);
+
         $this->db->select('a.*,
                 c.name as division_name,
                 d.name as departement_name,
@@ -697,6 +724,9 @@ class Approvals extends CI_Controller
 
     public function approvalPayrolls($approved_to, $created_by)
     {
+        $approved_to = urldecode($approved_to);
+        $created_by = urldecode($created_by);
+
         $this->db->select('a.period_start, a.period_end, b.group_id, d.name as group_name, c.name, a.created_date, COUNT(a.employee_id) as employee, SUM(a.net_income) as amount');
         $this->db->from('payrolls a');
         $this->db->join('employees b', 'a.employee_id = b.id');
@@ -726,6 +756,9 @@ class Approvals extends CI_Controller
 
     public function approvalSetupSalary($approved_to, $created_by)
     {
+        $approved_to = urldecode($approved_to);
+        $created_by = urldecode($created_by);
+
         $this->db->select('a.*,
                 c.name as division_name,
                 d.name as departement_name,
@@ -755,6 +788,9 @@ class Approvals extends CI_Controller
 
     public function approvalWarningLetters($approved_to, $created_by)
     {
+        $approved_to = urldecode($approved_to);
+        $created_by = urldecode($created_by);
+
         $this->db->select('a.*,
                 c.name as division_name,
                 d.name as departement_name,
@@ -784,6 +820,9 @@ class Approvals extends CI_Controller
 
     public function approvalResignations($approved_to, $created_by)
     {
+        $approved_to = urldecode($approved_to);
+        $created_by = urldecode($created_by);
+
         $this->db->select('a.*, 
                 g.users_id_from as status_check,
                 g.users_id_to as status_notification, 

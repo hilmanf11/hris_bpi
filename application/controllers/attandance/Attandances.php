@@ -149,9 +149,21 @@ class Attandances extends CI_Controller
 
     function formatTanggal($date)
     {
-        // menggunakan class Datetime
+        if (empty($date)) return NULL;
+
+        // Jika mengandung strip/slash, ganti slash ke strip agar strtotime membaca sebagai d-m-Y
+        $clean_date = str_replace('/', '-', trim($date));
+        
+        $timestamp = strtotime($clean_date);
+        
+        // Jika berhasil di-parse oleh strtotime
+        if ($timestamp !== false) {
+            return date('Y-m-d', $timestamp);
+        }
+
+        // Fallback menggunakan DateTime jika strtotime gagal
         $datetime = DateTime::createFromFormat('d/m/Y', $date);
-        return @$datetime->format('Y-m-d');
+        return $datetime ? $datetime->format('Y-m-d') : NULL;
     }
 
     public function create_temp($number, $date, $time)
@@ -223,27 +235,36 @@ class Attandances extends CI_Controller
             $data = new Spreadsheet_Excel_Reader($file, false);
             $total_row = $data->rowcount($sheet_index = 0);
 
-            // PERBAIKAN: Aktifkan kembali penampung temporary agar data terurut berdasarkan Waktu & PIN
+            // Penampung temporary agar data terurut berdasarkan Waktu & PIN
             for ($i = 2; $i <= $total_row; $i++) {
                 $datein = explode(";", $data->val($i, 4));
                 $clean_date = $this->formatTanggal($datein[0]); // Format ke Y-m-d
                 $clean_time = trim($datein[1]);                 // Format H:i:s
                 
-                // Masukkan lokasi/status (1 atau 2) ke fungsi create_temp jika fungsi tersebut mendukung, 
-                // atau buat temporary array lalu urutkan. 
-                // Di sini kita gunakan penampung array langsung, lalu kita urutkan secara manual via PHP:
+                $raw_lokasi = trim((string)$data->val($i, 5));
+                $lokasi = 1;
+                if ($raw_lokasi === '2' || strtolower($raw_lokasi) === 'out' || strtolower($raw_lokasi) === 'c/out') {
+                    $lokasi = 2;
+                } elseif ($raw_lokasi === '1' || strtolower($raw_lokasi) === 'in' || strtolower($raw_lokasi) === 'c/in') {
+                    $lokasi = 1;
+                } else {
+                    $lokasi = ((int)$raw_lokasi === 2) ? 2 : 1;
+                }
+
                 $sort_helper[] = array(
-                    'lokasi' => $data->val($i, 5),
-                    'number' => trim($data->val($i, 6)),
+                    'lokasi'   => $lokasi,
+                    'number'   => trim((string)$data->val($i, 6)),
                     'datetime' => $clean_date . " " . $clean_time,
-                    'date_in' => $datein[0] . " " . $datein[1]
+                    'date_in'  => trim($datein[0]) . " " . $clean_time
                 );
             }
 
-            // Urutkan array berdasarkan PIN (number) dan Waktu (datetime) secara Ascending (A-Z / Lama ke Baru)
-            // Ini krusial agar data IN diproses lebih dulu daripada data OUT
+            // Urutkan array berdasarkan PIN (number), Waktu (datetime) Ascending, dan jika waktu sama: IN dulu baru OUT
             usort($sort_helper, function($a, $b) {
                 if ($a['number'] == $b['number']) {
+                    if ($a['datetime'] == $b['datetime']) {
+                        return ($a['lokasi'] == 1) ? -1 : 1;
+                    }
                     return strcmp($a['datetime'], $b['datetime']);
                 }
                 return strcmp($a['number'], $b['number']);
@@ -255,7 +276,7 @@ class Attandances extends CI_Controller
                     'lokasi'   => $row['lokasi'],
                     'number'   => $row['number'],
                     'date_in'  => $row['date_in'], 
-                    'date_out' => $row['date_in'] // Dikirim sama tidak apa-apa, karena nanti di uploadcreate() akan diolah ulang tanggal aslinya
+                    'date_out' => $row['date_in']
                 );
             }
 
@@ -300,10 +321,11 @@ class Attandances extends CI_Controller
     public function uploadcreate()
     {
         if ($this->input->post()) {
-            $data = $this->input->post('data');
+            $data    = $this->input->post('data');
             $explode = explode(" ", $data['date_in']);
-            $date_in = $this->formatTanggal($explode[0]); // Ini adalah tanggal aktual dari mesin log
-            $time_in = $explode[1];                      // Ini adalah jam aktual dari mesin log
+            $date_in = $this->formatTanggal($explode[0]); // Tanggal log mesin (Y-m-d)
+            $time_in = trim($explode[1]);                 // Jam log mesin (H:i:s)
+            $lokasi  = isset($data['lokasi']) ? (int) trim((string)$data['lokasi']) : 1;
 
             // 1. Ambil Data Employee
             $this->db->select('*');
@@ -314,134 +336,341 @@ class Attandances extends CI_Controller
             if (!empty($employee->number)) {
                 
                 // ==========================================
-                // KONDISI 1: JIKA LOG ADALAH CHECK IN (1)
+                // KONDISI 1: JIKA LOG ADALAH CHECK IN (lokasi == 1)
                 // ==========================================
-                if ($data['lokasi'] == 1) {
+                if ($lokasi == 1) {
 
-                    // Cari apakah sudah ada data Check In untuk hari ini
+                    $target_date_in = $date_in;
+                    $shift = $this->getMatchingShift($employee->id, $target_date_in, $time_in, true);
+                    $tomorrow = date("Y-m-d", strtotime('+1 days', strtotime($target_date_in)));
+
+                    // Tentukan date_out berdasarkan shift & jam masuk
+                    // Jika shift lintas hari (misal shift malam 23:35->08:00 atau shift siang 16:00->00:00)
+                    // dan karyawan masuk di siang/sore/malam (>= 12:00:00), date_out adalah BESOK (tomorrow)
+                    $is_overnight = $this->isOvernightShift($shift);
+                    if ($is_overnight && strtotime("1970-01-01 " . $time_in) >= strtotime("1970-01-01 12:00:00")) {
+                        $date_out = $tomorrow;
+                    } else {
+                        $date_out = $target_date_in;
+                    }
+
+                    // Cari apakah sudah ada record absensi di tanggal masuk ini (1 karyawan = max 1 record per date_in)
                     $this->db->select('*');
                     $this->db->from('attandances');
                     $this->db->where('number', $data['number']);
-                    $this->db->where("date_in = '$date_in'");
+                    $this->db->where('date_in', $target_date_in);
+                    $this->db->order_by('id', 'ASC');
                     $attandance_in = $this->db->get()->row();
 
-                    // Ambil master shift employee
-                    $tolerance_hour_min = date("H:i:s", strtotime('-2 Hour', strtotime(@$time_in)));
-                    $tolerance_hour_plus = date("H:i:s", strtotime('+2 Hour', strtotime(@$time_in)));
-                    $this->db->select("d.start, d.end, d.days, d.working, d.tolerance, c.name, d.name as shift_name");
-                    $this->db->from('shift_employees b');
-                    $this->db->join('shifts c', 'c.id = b.shift_id');
-                    $this->db->join('shift_details d', 'd.shift_id = c.id');
-                    $this->db->where('b.employee_id', $employee->id);
-                    $this->db->where("TIME(d.start) >= TIME('$tolerance_hour_min') && TIME(d.start) <= TIME('$tolerance_hour_plus')");
-                    $shift = $this->db->get()->row();
-
-                    $tomorrow = date("Y-m-d", strtotime('+1 days', strtotime($date_in)));
-
-                    if (empty($shift->end)) {
-                        $hour_in = date("H:i:s", strtotime($time_in));
-                        $date_out = (strtotime($hour_in) >= strtotime("15:00:00")) ? $tomorrow : $date_in;
-                    } else {
-                        $date_out = (strtotime($shift->end) < strtotime($shift->start)) ? $tomorrow : $date_in;
-                    }
-
                     if (!empty($attandance_in->number)) {
-                        $data_attandance = array(
-                            'time_in' => $time_in,
-                            'shift_start'  => isset($shift->start) ? $shift->start : NULL,
-                            'shift_name'   => isset($shift->name) ? $shift->name : NULL,
-                            'shift_detail' => isset($shift->shift_name) ? $shift->shift_name : NULL,
-                            'shift_days'   => isset($shift->days) ? $shift->days : NULL,
-                            'attandance_type' => 'Upload HRIS'
-                        );
-                        $this->crud->update('attandances', ["id" => $attandance_in->id], $data_attandance, "no_log");
-                        echo json_encode(array("title" => "Updated", "message" => $employee->name . " | " . $date_in . " " . $time_in . " Update Check In", "theme" => "success"));
+                        $existing_time_in = (!empty($attandance_in->time_in) && $attandance_in->time_in !== '00:00:00') ? $attandance_in->time_in : null;
+
+                        // Perbarui jika time_in sebelumnya masih kosong (misal record dibuat oleh checkout duluan) atau jika time_in baru lebih awal
+                        if (empty($existing_time_in) || $time_in < $existing_time_in) {
+                            $data_attandance = array(
+                                'time_in'         => $time_in,
+                                'date_out'        => !empty($attandance_in->date_out) ? $attandance_in->date_out : $date_out,
+                                'shift_start'     => isset($shift->start) ? $shift->start : NULL,
+                                'shift_name'      => isset($shift->name) ? $shift->name : NULL,
+                                'shift_detail'    => isset($shift->shift_name) ? $shift->shift_name : NULL,
+                                'shift_days'      => isset($shift->days) ? $shift->days : NULL,
+                                'attandance_type' => 'Upload HRIS'
+                            );
+
+                            $this->crud->update('attandances', ["id" => $attandance_in->id], $data_attandance, "no_log");
+                            echo json_encode(array("title" => "Updated", "message" => $employee->name . " | " . $target_date_in . " " . $time_in . " Update Check In", "theme" => "success"));
+                        } else {
+                            // time_in sudah ada & lebih awal dari log ini -> abaikan (tap ganda / upload ulang)
+                            echo json_encode(array("title" => "Ignored", "message" => $employee->name . " | " . $target_date_in . " " . $time_in . " Check In Diabaikan (Sudah Ada)", "theme" => "success"));
+                        }
+
                     } else {
+                        // Belum ada record sama sekali di tanggal ini -> buat record baru
                         $data_attandance = array(
-                            'number' => $data['number'],
-                            'date_in' => $date_in,
-                            'time_in' => $time_in,
-                            'date_out' => $date_out, // Prediksi tanggal out awal
-                            'shift_start'  => isset($shift->start) ? $shift->start : NULL,
-                            'shift_name'   => isset($shift->name) ? $shift->name : NULL,
-                            'shift_detail' => isset($shift->shift_name) ? $shift->shift_name : NULL,
-                            'shift_days'   => isset($shift->days) ? $shift->days : NULL,
+                            'number'          => $data['number'],
+                            'date_in'         => $target_date_in,
+                            'time_in'         => $time_in,
+                            'date_out'        => $date_out,
+                            'shift_start'     => isset($shift->start) ? $shift->start : NULL,
+                            'shift_name'      => isset($shift->name) ? $shift->name : NULL,
+                            'shift_detail'    => isset($shift->shift_name) ? $shift->shift_name : NULL,
+                            'shift_days'      => isset($shift->days) ? $shift->days : NULL,
                             'attandance_type' => 'Upload HRIS'
                         );
                         $this->crud->create('attandances', $data_attandance, "no_log");
-                        echo json_encode(array("title" => "Created", "message" => $employee->name . " | " . $date_in . " " . $time_in . " Create Check In", "theme" => "success"));
+                        echo json_encode(array("title" => "Created", "message" => $employee->name . " | " . $target_date_in . " " . $time_in . " Create Check In", "theme" => "success"));
                     }
 
                 // ==========================================
-                // KONDISI 2: JIKA LOG ADALAH CHECK OUT (2)
+                // KONDISI 2: JIKA LOG ADALAH CHECK OUT (lokasi == 2)
                 // ==========================================
                 } else {
                     $yesterday = date("Y-m-d", strtotime('-1 days', strtotime($date_in)));
+                    $hour_out  = (int) date('H', strtotime($time_in));
+                    $shift_out = $this->getMatchingShift($employee->id, $date_in, $time_in, false);
+                    $is_shift_overnight = $this->isOvernightShift($shift_out);
 
-                    // Ambil shift untuk mendeteksi apakah karyawan ini terdaftar di shift malam (lintas hari)
-                    $tolerance_hour_min = date("H:i:s", strtotime('-2 Hour', strtotime(@$time_in)));
-                    $tolerance_hour_plus = date("H:i:s", strtotime('+2 Hour', strtotime(@$time_in)));
-                    $this->db->select("d.start, d.end, d.days, d.working, d.tolerance, c.name, d.name as shift_name");
-                    $this->db->from('shift_employees b');
-                    $this->db->join('shifts c', 'c.id = b.shift_id');
-                    $this->db->join('shift_details d', 'd.shift_id = c.id');
-                    $this->db->where('b.employee_id', $employee->id);
-                    $this->db->where("TIME(d.end) >= TIME('$tolerance_hour_min') && TIME(d.end) <= TIME('$tolerance_hour_plus')");
-                    $shift = $this->db->get()->row();
+                    // 1. Tentukan target_date_in:
+                    // Jika jam checkout adalah pagi/subuh/dini hari (<= 11:00), prioritaskan mencocokkan ke record kemarin jika ada
+                    $target_date_in = $date_in;
 
-                    // Logika Penentuan Tanggal Masuk Seharusnya
-                    // Jika jam pulang shift lebih kecil dari jam masuk (artinya lintas hari, misal masuk 22:00 pulang 06:00)
-                    if (!empty($shift) && (strtotime($shift->end) < strtotime($shift->start))) {
-                        // Jika log out jam 00:00 - 09:00 pagi, kemungkinan besar ini shift malam dari hari kemarin
-                        $tanggal_masuk_seharusnya = ($time_in < "12:00:00") ? $yesterday : $date_in;
-                    } else {
-                        // Shift normal (pulang di hari yang sama)
-                        // Atau jika jam pulang melewati tengah malam tapi di luar shift terjadwal, cek jam pulangnya
-                        $tanggal_masuk_seharusnya = ($time_in < "08:00:00") ? $yesterday : $date_in;
+                    if ($hour_out <= 11) {
+                        // Cek apakah ada record kemarin
+                        $this->db->select('*');
+                        $this->db->from('attandances');
+                        $this->db->where('number', $data['number']);
+                        $this->db->where('date_in', $yesterday);
+                        $this->db->order_by('id', 'ASC');
+                        $att_yesterday = $this->db->get()->row();
+
+                        // Cek apakah ada record hari ini
+                        $this->db->select('*');
+                        $this->db->from('attandances');
+                        $this->db->where('number', $data['number']);
+                        $this->db->where('date_in', $date_in);
+                        $this->db->order_by('id', 'ASC');
+                        $att_today = $this->db->get()->row();
+
+                        if (!empty($att_yesterday->number) && empty($att_today->number)) {
+                            // Ada record kemarin dan belum ada record hari ini -> pasangkan ke kemarin
+                            $target_date_in = $yesterday;
+                        } elseif (!empty($att_yesterday->number) && !empty($att_today->number)) {
+                            // Jika record kemarin time_out-nya masih kosong -> pasangkan ke kemarin
+                            if (empty($att_yesterday->time_out) || $att_yesterday->time_out == '00:00:00') {
+                                $target_date_in = $yesterday;
+                            } else {
+                                $target_date_in = $date_in;
+                            }
+                        } elseif ($is_shift_overnight) {
+                            // Belum ada record sama sekali kemarin maupun hari ini (Lupa In shift malam)
+                            $target_date_in = $yesterday;
+                        }
                     }
 
-                    // KUNCI PERBAIKAN: Cari data absensi berdasarkan tanggal masuknya (date_in)
+                    // 2. Cari record yang sudah ada di target_date_in (1 karyawan = max 1 record per date_in)
                     $this->db->select('*');
                     $this->db->from('attandances');
                     $this->db->where('number', $data['number']);
-                    $this->db->where('date_in', $tanggal_masuk_seharusnya); 
-                    $attandance_match = $this->db->get()->row();
+                    $this->db->where('date_in', $target_date_in);
+                    $this->db->order_by('id', 'ASC');
+                    $existing = $this->db->get()->row();
 
-                    if (!empty($attandance_match->number)) {
-                        // JIKA DATA IN NYA KEMARIN/HARI INI ADA, UPDATE TANGGAL & JAM OUT-NYA
-                        $data_attandance = array(
-                            'date_out' => $date_in, // Tanggal out aktual dari mesin (Hari ini/esok)
-                            'time_out' => $time_in, // Jam out aktual dari mesin
-                            'shift_start'  => isset($shift->start) ? $shift->start : NULL,
-                            'shift_name'   => isset($shift->name) ? $shift->name : NULL,
-                            'shift_detail' => isset($shift->shift_name) ? $shift->shift_name : NULL,
-                            'shift_days'   => isset($shift->days) ? $shift->days : NULL,
-                            'attandance_type' => 'Upload HRIS'
-                        );
-                        $this->crud->update('attandances', ["id" => $attandance_match->id], $data_attandance, "no_log");
-                        echo json_encode(array("title" => "Updated", "message" => $employee->name . " | In: " . $tanggal_masuk_seharusnya . " - Out: " . $date_in . " " . $time_in . " Update Check Out", "theme" => "success"));
+                    if (!empty($existing->number)) {
+                        // Karyawan SUDAH MEMILIKI RECORD di target_date_in ini!
+                        // PASTI UPDATE RECORD INI, JANGAN PERNAH INSERT BARU!
+                        $existing_out = (!empty($existing->time_out) && $existing->time_out !== '00:00:00') ? $existing->time_out : null;
+
+                        // Jika time_out baru sama persis atau sudah ada time_out yang lebih lambat di tanggal out yang sama -> abaikan
+                        if ($existing_out && $existing->date_out == $date_in && $time_in <= $existing_out) {
+                            echo json_encode(array("title" => "Ignored", "message" => $employee->name . " | In: " . $target_date_in . " - Out: " . $date_in . " " . $time_in . " Check Out Diabaikan (Sudah Ada yang Lebih Terlambat)", "theme" => "success"));
+                        } else {
+                            $data_attandance = array(
+                                'date_out'     => $date_in,
+                                'time_out'     => $time_in,
+                                'shift_start'  => !empty($existing->shift_start) ? $existing->shift_start : (isset($shift_out->start) ? $shift_out->start : NULL),
+                                'shift_name'   => !empty($existing->shift_name) ? $existing->shift_name : (isset($shift_out->name) ? $shift_out->name : NULL),
+                                'shift_detail' => !empty($existing->shift_detail) ? $existing->shift_detail : (isset($shift_out->shift_name) ? $shift_out->shift_name : NULL),
+                                'shift_days'   => !empty($existing->shift_days) ? $existing->shift_days : (isset($shift_out->days) ? $shift_out->days : NULL)
+                            );
+                            $this->crud->update('attandances', ["id" => $existing->id], $data_attandance, "no_log");
+                            echo json_encode(array("title" => "Updated", "message" => $employee->name . " | In: " . $target_date_in . " - Out: " . $date_in . " " . $time_in . " Update Check Out", "theme" => "success"));
+                        }
+
                     } else {
-                        // JIKA KARYAWAN LUPA ABSEN IN (Data IN tidak ditemukan), BUAT BARIS BARU
+                        // Karyawan BENAR-BENAR BELUM MEMILIKI RECORD di target_date_in ini (Lupa Check In)
                         $data_attandance = array(
-                            'number' => $data['number'],
-                            'date_in' => $tanggal_masuk_seharusnya,
-                            'time_in' => NULL, // Kosong karena lupa pencet IN
-                            'date_out' => $date_in,
-                            'time_out' => $time_in,
-                            'shift_start'  => isset($shift->start) ? $shift->start : NULL,
-                            'shift_name'   => isset($shift->name) ? $shift->name : NULL,
-                            'shift_detail' => isset($shift->shift_name) ? $shift->shift_name : NULL,
-                            'shift_days'   => isset($shift->days) ? $shift->days : NULL,
+                            'number'          => $data['number'],
+                            'date_in'         => $target_date_in,
+                            'time_in'         => NULL,
+                            'date_out'        => $date_in,
+                            'time_out'        => $time_in,
+                            'shift_start'     => isset($shift_out->start) ? $shift_out->start : NULL,
+                            'shift_name'      => isset($shift_out->name) ? $shift_out->name : NULL,
+                            'shift_detail'    => isset($shift_out->shift_name) ? $shift_out->shift_name : NULL,
+                            'shift_days'      => isset($shift_out->days) ? $shift_out->days : NULL,
                             'attandance_type' => 'Upload HRIS'
                         );
                         $this->crud->create('attandances', $data_attandance, "no_log");
-                        echo json_encode(array("title" => "Created", "message" => $employee->name . " | " . $date_in . " " . $time_in . " Create Check Out (Tanpa data IN)", "theme" => "success"));
+                        echo json_encode(array("title" => "Created", "message" => $employee->name . " | In: " . $target_date_in . " - Out: " . $date_in . " " . $time_in . " Create Check Out (Tanpa Check In)", "theme" => "success"));
                     }
                 }
             } else {
                 echo json_encode(array("title" => "Warning", "message" => $data['number'] . " Employee ID Unregistered", "theme" => "error"));
             }
         }
+    }
+
+    private function isOvernightShift($shift)
+    {
+        if (empty($shift)) return false;
+
+        $start = !empty($shift->start) ? $shift->start : '00:00:00';
+        $end   = !empty($shift->end) ? $shift->end : '00:00:00';
+
+        if ($start == '24:00:00') $start = '00:00:00';
+        if ($end == '24:00:00') $end = '00:00:00';
+
+        $st_ts = strtotime("1970-01-01 " . $start);
+        $en_ts = strtotime("1970-01-01 " . $end);
+
+        // 1. Jika end time < start time (misal 16:00 -> 01:00, 19:00 -> 07:00)
+        if ($en_ts < $st_ts) {
+            return true;
+        }
+
+        // 2. Jika end time = 00:00:00 dan start time >= 12:00:00 (misal Shift Siang: 16:00 -> 00:00)
+        if ($end == '00:00:00' && $st_ts >= strtotime("1970-01-01 12:00:00")) {
+            return true;
+        }
+
+        // 3. Jika start time = 00:00:00 dan end time <= 12:00:00 (Shift Malam: 00:00 -> 08:00 / 09:00)
+        if ($start == '00:00:00' && $en_ts <= strtotime("1970-01-01 12:00:00") && $en_ts > 0) {
+            return true;
+        }
+
+        // 4. Cek nama shift mengandung kata MALAM
+        $name = (isset($shift->name) ? $shift->name : '') . ' ' . (isset($shift->shift_name) ? $shift->shift_name : '');
+        if (stripos($name, 'MALAM') !== false) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function getMatchingShift($employee_id, $target_date, $target_time, $is_check_in = true)
+    {
+        $this->db->select("d.start, d.end, d.days, d.working, d.tolerance, c.name, d.name as shift_name");
+        $this->db->from('shift_employees b');
+        $this->db->join('shifts c', 'c.id = b.shift_id');
+        $this->db->join('shift_details d', 'd.shift_id = c.id');
+        $this->db->where('b.employee_id', $employee_id);
+        $all_shifts = $this->db->get()->result();
+
+        if (empty($all_shifts)) {
+            return null;
+        }
+
+        // Normalisasi jam 24:00:00 -> 00:00:00
+        foreach ($all_shifts as $s) {
+            if ($s->start == '24:00:00') $s->start = '00:00:00';
+            if ($s->end == '24:00:00') $s->end = '00:00:00';
+        }
+
+        $is_saturday = (date('N', strtotime($target_date)) == 6);
+        
+        // Filter kandidat shift berdasarkan hari (Sabtu vs Hari Kerja Biasa)
+        $candidates = array();
+        foreach ($all_shifts as $s) {
+            $is_sabtu_detail = (stripos($s->shift_name, 'SABTU') !== false || strtoupper($s->working) === 'WEEKEND');
+            if ($is_saturday && $is_sabtu_detail) {
+                $candidates[] = $s;
+            } elseif (!$is_saturday && !$is_sabtu_detail) {
+                $candidates[] = $s;
+            }
+        }
+
+        // Jika tidak ada yang cocok dengan filter hari, gunakan semua shift
+        if (empty($candidates)) {
+            $candidates = $all_shifts;
+        }
+
+        // Cari detail shift dengan selisih waktu terkecil (circular 24 jam)
+        $best_shift = null;
+        $min_diff   = 999999;
+
+        foreach ($candidates as $s) {
+            $ref_time = $is_check_in ? $s->start : $s->end;
+            if (empty($ref_time)) continue;
+
+            // Jika check-in dan ada lembur awal di cash_carries, gunakan jam mulai lembur sebagai patokan IN
+            if ($is_check_in && !empty($employee_id)) {
+                $ot_early = $this->get_early_overtime($employee_id, $target_date, $s->start);
+                if ($ot_early && !empty($ot_early->start)) {
+                    $ref_time = ($ot_early->start == '24:00:00') ? '00:00:00' : $ot_early->start;
+                }
+            }
+
+            $diff = $this->getTimeDiffMinutes($target_time, $ref_time);
+            if ($diff < $min_diff) {
+                $min_diff   = $diff;
+                $best_shift = $s;
+            }
+        }
+
+        return $best_shift ? $best_shift : $all_shifts[0];
+    }
+
+    /**
+     * Cari data lembur awal di tabel cash_carries untuk karyawan pada tanggal tertentu.
+     */
+    private function get_early_overtime($employee_id, $date, $shift_start)
+    {
+        if (empty($employee_id) || empty($date) || empty($shift_start)) {
+            return null;
+        }
+
+        $this->db->select('*');
+        $this->db->from('cash_carries');
+        $this->db->where('employee_id', $employee_id);
+        $this->db->where('trans_date', $date);
+        $this->db->where('deleted', 0);
+        $overtimes = $this->db->get()->result();
+
+        if (empty($overtimes)) {
+            return null;
+        }
+
+        $shift_start_norm = ($shift_start == '24:00:00') ? '00:00:00' : $shift_start;
+        $shift_start_ts   = strtotime("1970-01-01 " . $shift_start_norm);
+
+        $matched_ot = null;
+        $earliest_start_ts = PHP_INT_MAX;
+
+        foreach ($overtimes as $ot) {
+            if (empty($ot->start)) continue;
+
+            $ot_start_norm = ($ot->start == '24:00:00') ? '00:00:00' : $ot->start;
+            $ot_end_norm   = !empty($ot->end) ? (($ot->end == '24:00:00') ? '00:00:00' : $ot->end) : $ot_start_norm;
+
+            $ot_start_ts = strtotime("1970-01-01 " . $ot_start_norm);
+            $ot_end_ts   = strtotime("1970-01-01 " . $ot_end_norm);
+
+            // Shift siang/pagi/reguler (bukan midnight 00:00:00)
+            if ($shift_start_norm !== '00:00:00') {
+                if ($ot_start_ts < $shift_start_ts) {
+                    $gap_to_shift = $shift_start_ts - $ot_end_ts;
+                    if ($ot_end_ts >= $shift_start_ts || $gap_to_shift <= 3600 || ($shift_start_ts - $ot_start_ts <= 28800)) {
+                        if ($ot_start_ts < $earliest_start_ts) {
+                            $earliest_start_ts = $ot_start_ts;
+                            $matched_ot = $ot;
+                        }
+                    }
+                }
+            } else {
+                // Shift malam (start 00:00:00 / midnight)
+                if ($ot_start_ts >= strtotime("1970-01-01 18:00:00")) {
+                    if ($ot_start_ts < $earliest_start_ts) {
+                        $earliest_start_ts = $ot_start_ts;
+                        $matched_ot = $ot;
+                    }
+                }
+            }
+        }
+
+        return $matched_ot;
+    }
+
+    private function getTimeDiffMinutes($time1, $time2)
+    {
+        $ts1 = strtotime("1970-01-01 " . $time1);
+        $ts2 = strtotime("1970-01-01 " . $time2);
+        if ($ts1 === false || $ts2 === false) return 999999;
+
+        $diff = abs($ts1 - $ts2) / 60;
+        if ($diff > 720) {
+            $diff = 1440 - $diff;
+        }
+        return $diff;
     }
 
     // public function uploadcreate()

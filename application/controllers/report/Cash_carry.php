@@ -173,14 +173,14 @@ class Cash_carry extends CI_Controller
                     $start = strtotime($record['trans_date']);
                     
 
-                    if (empty($record['time_in']) || empty($record['time_out'])) {
+                    if (empty($record['att_time_in']) || empty($record['att_time_out'])) {
                         $att_hour = 0;
                     } else {
-                        $att_time_begin = strtotime($record['trans_date'] . " " . $record['time_in']);
-                        $att_time_end   = strtotime($record['trans_date'] . " " . $record['time_out']);
+                        $att_time_begin = strtotime($record['trans_date'] . " " . $record['att_time_in']);
+                        $att_time_end   = strtotime($record['trans_date'] . " " . $record['att_time_out']);
 
                         if ($att_time_end < $att_time_begin) {
-                            $att_time_end = strtotime($record['trans_date'] . " " . $record['time_out'] . " +1 days");
+                            $att_time_end = strtotime($record['trans_date'] . " " . $record['att_time_out'] . " +1 days");
                         }
 
                         $break = isset($record['break']) ? $record['break'] : 0;
@@ -324,7 +324,8 @@ class Cash_carry extends CI_Controller
                     #reportTable th, #reportTable td { border: 1px solid #000; padding: 4px 6px; }
                     #reportTable th { background-color: #ffffff; text-align: center; font-weight: bold; vertical-align: middle; }
                     
-                    .grandtotal-all { background-color: #e6e6e6; font-weight: bold; }
+                    .grandtotal-all { background-color: #e6e6e6; font-weight: bold; font-size: 13px; }
+                    .grandtotal-all td { font-weight: bold; font-size: 13px; }
                     
                     .approval-container { width: 100%; margin-top: 30px; text-align: center; }
                     .approval-table { border-collapse: collapse; width: 500px; margin: 0 auto; font-size: 11px; }
@@ -435,23 +436,30 @@ class Cash_carry extends CI_Controller
                     $row['saturday_amount'] = round($row['saturday_amount'], -3);
                     $row['sunday_amount'] = round($row['sunday_amount'], -3);
                     $row['holiday_amount'] = round($row['holiday_amount'], -3);
-                    $row['total_amount'] =$row['weekday_amount']+$row['saturday_amount']+$row['sunday_amount']+$row['holiday_amount'];
+                    $row['total_amount'] = $row['weekday_amount'] + $row['saturday_amount'] + $row['sunday_amount'] + $row['holiday_amount'];
+
+                    $weekday_amt_val  = ($option == "excel") ? $row['weekday_amount'] : number_format($row['weekday_amount'], 0, ',', '.');
+                    $saturday_amt_val = ($option == "excel") ? $row['saturday_amount'] : number_format($row['saturday_amount'], 0, ',', '.');
+                    $sunday_amt_val   = ($option == "excel") ? $row['sunday_amount'] : number_format($row['sunday_amount'], 0, ',', '.');
+                    $holiday_amt_val  = ($option == "excel") ? $row['holiday_amount'] : number_format($row['holiday_amount'], 0, ',', '.');
+                    $total_amt_val    = ($option == "excel") ? $row['total_amount'] : number_format($row['total_amount'], 0, ',', '.');
+
                     $html .= '<tr>
                                 <td style="text-align:center;">' . $no . '</td>
-                                <td style="text-align:center;">' . $row['employee_number'] . '</td>
+                                <td style="text-align:center; mso-number-format:\@;">' . $row['employee_number'] . '</td>
                                 <td>' . $row['employee_name'] . '</td>
                                 <td>' . $row['division_name'] . '</td>
                                 <td>' . $row['departement_name'] . '</td>
-                                <td style="text-align:center;">' . number_format($row['weekday_hour'], 2) . '</td>
-                                <td style="text-align:right;">' . number_format($row['weekday_amount'], 0, ',', '.') . '</td>
-                                <td style="text-align:center;">' . number_format($row['saturday_hour'], 2) . '</td>
-                                <td style="text-align:right;">' . number_format($row['saturday_amount'], 0, ',', '.') . '</td>
-                                <td style="text-align:center;">' . number_format($row['sunday_hour'], 2) . '</td>
-                                <td style="text-align:right;">' . number_format($row['sunday_amount'], 0, ',', '.') . '</td>
-                                <td style="text-align:center;">' . number_format($row['holiday_hour'], 2) . '</td>
-                                <td style="text-align:right;">' . number_format($row['holiday_amount'], 0, ',', '.') . '</td>
-                                <td style="text-align:center;">' . number_format($row['total_netto_hour'], 2) . '</td>
-                                <td style="text-align:right;">' . number_format($row['total_amount'], 0, ',', '.') . '</td>
+                                <td style="text-align:center;">' . (float)$row['weekday_hour'] . '</td>
+                                <td style="text-align:right;">' . $weekday_amt_val . '</td>
+                                <td style="text-align:center;">' . (float)$row['saturday_hour'] . '</td>
+                                <td style="text-align:right;">' . $saturday_amt_val . '</td>
+                                <td style="text-align:center;">' . (float)$row['sunday_hour'] . '</td>
+                                <td style="text-align:right;">' . $sunday_amt_val . '</td>
+                                <td style="text-align:center;">' . (float)$row['holiday_hour'] . '</td>
+                                <td style="text-align:right;">' . $holiday_amt_val . '</td>
+                                <td style="text-align:center;">' . (float)$row['total_netto_hour'] . '</td>
+                                <td style="text-align:right;">' . $total_amt_val . '</td>
                                 <td></td>
                             </tr>';
 
@@ -469,88 +477,83 @@ class Cash_carry extends CI_Controller
                     $no++;
                 }
 
+                $tot_weekday_amt_val  = ($option == "excel") ? $tot_weekday_amt : number_format($tot_weekday_amt, 0, ',', '.');
+                $tot_saturday_amt_val = ($option == "excel") ? $tot_saturday_amt : number_format($tot_saturday_amt, 0, ',', '.');
+                $tot_sunday_amt_val   = ($option == "excel") ? $tot_sunday_amt : number_format($tot_sunday_amt, 0, ',', '.');
+                $tot_holiday_amt_val  = ($option == "excel") ? $tot_holiday_amt : number_format($tot_holiday_amt, 0, ',', '.');
+                $grand_total_val      = ($option == "excel") ? $grand_total_dibayar : number_format($grand_total_dibayar, 0, ',', '.');
+
                 // Total Summary Row
-                $html .= '<tr class="grandtotal-all">
-                            <td colspan="5" style="text-align:center;">TOTAL</td>
-                            <td style="text-align:center;">' . number_format($tot_weekday_hr, 2) . '</td>
-                            <td style="text-align:right;">' . number_format($tot_weekday_amt, 0, ',', '.') . '</td>
-                            <td style="text-align:center;">' . number_format($tot_saturday_hr, 2) . '</td>
-                            <td style="text-align:right;">' . number_format($tot_saturday_amt, 0, ',', '.') . '</td>
-                            <td style="text-align:center;">' . number_format($tot_sunday_hr, 2) . '</td>
-                            <td style="text-align:right;">' . number_format($tot_sunday_amt, 0, ',', '.') . '</td>
-                            <td style="text-align:center;">' . number_format($tot_holiday_hr, 2) . '</td>
-                            <td style="text-align:right;">' . number_format($tot_holiday_amt, 0, ',', '.') . '</td>
-                            <td style="text-align:center;">' . number_format($tot_netto_hr, 2) . '</td>
-                            <td style="text-align:right;">' . number_format($grand_total_dibayar, 0, ',', '.') . '</td>
-                            <td></td>
+                $html .= '<tr class="grandtotal-all" style="font-weight: bold; font-size: 13px;">
+                            <td colspan="5" style="text-align:center; font-weight: bold; font-size: 13px;">TOTAL</td>
+                            <td style="text-align:center; font-weight: bold; font-size: 13px;">' . (float)$tot_weekday_hr . '</td>
+                            <td style="text-align:right; font-weight: bold; font-size: 13px;">' . $tot_weekday_amt_val . '</td>
+                            <td style="text-align:center; font-weight: bold; font-size: 13px;">' . (float)$tot_saturday_hr . '</td>
+                            <td style="text-align:right; font-weight: bold; font-size: 13px;">' . $tot_saturday_amt_val . '</td>
+                            <td style="text-align:center; font-weight: bold; font-size: 13px;">' . (float)$tot_sunday_hr . '</td>
+                            <td style="text-align:right; font-weight: bold; font-size: 13px;">' . $tot_sunday_amt_val . '</td>
+                            <td style="text-align:center; font-weight: bold; font-size: 13px;">' . (float)$tot_holiday_hr . '</td>
+                            <td style="text-align:right; font-weight: bold; font-size: 13px;">' . $tot_holiday_amt_val . '</td>
+                            <td style="text-align:center; font-weight: bold; font-size: 13px;">' . (float)$tot_netto_hr . '</td>
+                            <td style="text-align:right; font-weight: bold; font-size: 13px;">' . $grand_total_val . '</td>
+                            <td style="font-weight: bold; font-size: 13px;"></td>
                         </tr>';
 
                 $html .= '</tbody></table>';
 
-                // 1. Generate QR Code untuk Approval 1 & 2 (jika datanya ada)
-                $qr_path_1 = '';
-                $qr_path_2 = '';
-                if($apr_sts == 1){
-
-                    // if (!empty($approval->name_approval_1)) {
+                // TABEL APPROVAL (Hanya ditampilkan jika bukan export Excel)
+                if ($option != "excel") {
+                    // 1. Generate QR Code untuk Approval 1 & 2 (jika datanya ada)
+                    $qr_path_1 = '';
+                    $qr_path_2 = '';
+                    if ($apr_sts == 1) {
                         // Memanggil method bawaan kamu untuk generate gambar
                         $this->createQrcode('Lhuvita Rachmadhanti', "assets/image/qrcode/");
                         
-                        // Path ke file gambar yang dihasilkan (sesuaikan penamaan file dari method createQrcode kamu)
+                        // Path ke file gambar yang dihasilkan
                         $img_src_1 = base_url("assets/image/qrcode/" . 'Lhuvita Rachmadhanti' . ".png");
                         $qr_path_1 = '<img src="' . $img_src_1 . '" width="80" height="80" />';
-                    // }
-
-                    
-                    // if (!empty($approval->name_approval_2)) {
+                        
                         $this->createQrcode('Yusman Nugraha Utama', "assets/image/qrcode/");
                         
                         $img_src_2 = base_url("assets/image/qrcode/" . 'Yusman Nugraha Utama' . ".png");
                         $qr_path_2 = '<img src="' . $img_src_2 . '" width="80" height="80" />';
-                    // }
-
-                    // if (!empty($approval->name_approval_3)) {
+                        
                         $this->createQrcode('Faris Fahdian', "assets/image/qrcode/");
                         
                         $img_src_3 = base_url("assets/image/qrcode/" . 'Faris Fahdian' . ".png");
                         $qr_path_3 = '<img src="' . $img_src_3 . '" width="80" height="80" />';
-                    // }
+                    } else {
+                        $qr_path_1 = '';
+                        $qr_path_2 = '';
+                    }
 
-                }else{
-                    $qr_path_1 = '';
-                    $qr_path_2 = '';
-                    // $approval->name_approval_2 = '';
-                    // $approval->name_approval_1 = '';
+                    $html .= '<div class="approval-container">
+                            <table class="approval-table">
+                                <tr>
+                                    <th width="33%">Approved</th>
+                                    <th width="33%">Approved</th>
+                                    <th width="34%">Prepared</th>
+                                </tr>
+                                <tr>
+                                    <td class="approval-space"></td>
+                                    <td class="approval-space">' . $qr_path_2 . '</td>
+                                    <td class="approval-space">' . $qr_path_1 . '</td>
+                                </tr>
+                                <tr>
+                                    <td class="approval-position">ACCOUNTING & FINANCE</td>
+                                    <td class="approval-position">GENERAL MANAGER</td>
+                                    <td class="approval-position">HRD</td>
+                                </tr>
+                                <tr>
+                                    <td class="approval-name">Faris Fahdian</td>
+                                    <td class="approval-name">Yusman Nugraha Utama</td>
+                                    <td class="approval-name">Lhuvita Rachmadhanti</td>
+                                </tr>
+                            </table>
+                            <div class="clearfix"></div>
+                        </div>';
                 }
-
-                // echo json_encode($approval );
-
-                // TABEL APPROVAL
-                $html .= '<div class="approval-container">
-                        <table class="approval-table">
-                            <tr>
-                                <th width="33%">Approved</th>
-                                <th width="33%">Approved</th>
-                                <th width="34%">Prepared</th>
-                            </tr>
-                            <tr>
-                                <td class="approval-space"></td>
-                                <td class="approval-space">' . $qr_path_2 . '</td>
-                                <td class="approval-space">' . $qr_path_1 . '</td>
-                            </tr>
-                            <tr>
-                                <td class="approval-position">ACCOUNTING & FINANCE</td>
-                                <td class="approval-position">GENERAL MANAGER</td>
-                                <td class="approval-position">HRD</td>
-                            </tr>
-                            <tr>
-                                <td class="approval-name">Faris Fahdian</td>
-                                <td class="approval-name">Yusman Nugraha Utama</td>
-                                <td class="approval-name">Lhuvita Rachmadhanti</td>
-                            </tr>
-                        </table>
-                        <div class="clearfix"></div>
-                    </div>';
 
                 $html .= '</body></html>';
                 

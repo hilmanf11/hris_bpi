@@ -1,0 +1,19 @@
+# Environment & Config
+.env
+.env.*
+application/config/database.php
+
+# Assets uploads/images/documents (preserve vendor/css/js assets)
+assets/image/
+assets/document/
+assets/document/attendance/
+assets/temp/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
